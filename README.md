@@ -40,6 +40,7 @@ https://moneysense-tau.vercel.app/
 ### 입력
 - **영수증 추가**: 샘플 영수증 3종(품목형 / 합계형 / 카드매출전표형) 선택 또는 이미지 업로드(mock OCR 안내 후 샘플 결과 사용)
 - **직접 지출 입력**: 날짜·상호·소비처 유형·결제수단·품목·메모 입력, 저장 시 확인 모달
+- **직접 입력 품목 AI 분류**: 품목 추가 시 LLM 분류를 시도하고(키 없음·오류·타임아웃 시 룰 기반 폴백), 분류 출처를 "AI 분류"/"룰 기반" 배지로 표시
 - **빠른 금액 버튼**: +1천원 ~ +10만원 버튼 누적 입력 + 초기화 (품목 금액 입력에도 재사용)
 - **합계형 영수증 품목 직접 추가**: 총액만 인식된 영수증에 품목을 채워 분석 정확도 향상
 - **카드·계좌 거래내역**: 샘플 불러오기 + 직접 추가
@@ -78,7 +79,7 @@ flowchart TD
 | --- | --- | --- |
 | OCR·입력 보완 | 영수증에서 품목·금액 추출, 흐릿하면 직접 입력 유도 | `mockParseReceipt` (mock OCR) |
 | 거래내역 매칭 | 금액·날짜·상호·결제수단 점수제로 영수증과 거래 연결 | `matchReceiptsToTransactions`, `applyMatchOverrides` |
-| 품목 분류 | 품목을 필수식료품/간편식/간식·음료 등으로 분류 | `classifyItem` (룰 기반) |
+| 품목 분류 | 품목을 필수식료품/간편식/간식·음료 등으로 분류 | `classifyItemWithLLM` — 직접 입력 품목은 LLM 분류(`ANTHROPIC_API_KEY` 설정 시), 키 없음·오류·3초 타임아웃 시 `classifyItem`(룰 기반) 폴백 |
 | 생활비 온도 | 가산 요인을 합산해 0~100℃ 온도 계산 | `calculateTemperature`, `buildTemperatureBreakdown` |
 | 원인분해 | 상승(또는 절약) 원인을 4가지로 분해하고 지난 소비와 비교 | `analyzeCauses`, `buildComparisons` |
 | 장보기 플랜 | 절약 + 지역상생 전환 제안, 발표용 요약 생성 | `generateActionPlans`, `generatePresentationSummary` |
@@ -178,6 +179,8 @@ npm run build   # 프로덕션 빌드
 npm run lint    # ESLint 검사
 ```
 
+LLM 품목 분류를 켜려면 `.env.example`을 `.env.local`로 복사하고 `ANTHROPIC_API_KEY`를 넣으세요. **키가 없어도 모든 기능이 룰 기반 분류로 동작합니다** (데모는 네트워크 없이도 재현됩니다).
+
 ---
 
 ## 현재 MVP 범위
@@ -186,7 +189,7 @@ npm run lint    # ESLint 검사
 | --- | --- | --- |
 | 영수증 인식 | mock OCR / 샘플 영수증 | OCR API |
 | 카드·계좌 내역 | 샘플 거래내역 | 금융 API / 마이데이터 연동 |
-| 품목 분류 | 룰 기반 + mock AI 함수 | LLM 분류 Agent |
+| 품목 분류 | 룰 기반 + 직접 입력 품목 LLM 분류(폴백: 룰 기반) | LLM 분류 Agent 전면 적용 |
 | 원인분해 | 계산 로직 기반 | 개인화 분석 Agent |
 | 장보기 플랜 | mock AI 제안 | LLM 추천 Agent |
 | 데이터 저장 | localStorage | DB / 사용자 계정 기반 저장 |

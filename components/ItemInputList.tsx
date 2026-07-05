@@ -5,7 +5,7 @@ import { Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import AmountQuickButtons from './AmountQuickButtons';
 import { Badge, Button } from './ui';
-import { categoryLabels, classifyItem } from '@/lib/services/mockAi';
+import { categoryLabels, classifyItem, classifyItemWithLLM } from '@/lib/services/mockAi';
 import type { ExpenseItem } from '@/lib/types';
 
 type ItemInputListProps = {
@@ -19,19 +19,25 @@ const nextItemId = () => `item-${Date.now()}-${itemSeq++}`;
 export default function ItemInputList({ items, onChange }: ItemInputListProps) {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState(0);
+  const [classifying, setClassifying] = useState(false);
 
-  const addItem = () => {
-    if (!name.trim() || amount <= 0) return;
+  const addItem = async () => {
+    if (!name.trim() || amount <= 0 || classifying) return;
+    setClassifying(true);
+    // LLM 분류 시도 → 키 없음·오류·타임아웃이면 룰 기반 폴백 (분석 흐름은 항상 이어진다)
+    const { category, classifiedBy } = await classifyItemWithLLM(name.trim());
     const newItem: ExpenseItem = {
       id: nextItemId(),
       name: name.trim(),
       amount,
-      category: classifyItem(name),
+      category,
       source: 'USER_INPUT',
+      classifiedBy,
     };
     onChange([...items, newItem]);
     setName('');
     setAmount(0);
+    setClassifying(false);
   };
 
   return (
@@ -47,6 +53,9 @@ export default function ItemInputList({ items, onChange }: ItemInputListProps) {
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-sm font-medium text-slate-800 truncate">{item.name}</span>
                 <Badge tone="slate">{categoryLabels[item.category]}</Badge>
+                {/* 분류 출처 배지: "숫자는 코드가, 언어는 LLM이" 하이브리드 구조의 시각적 증거 */}
+                {item.classifiedBy === 'llm' && <Badge tone="blue">AI 분류</Badge>}
+                {item.classifiedBy === 'rule' && <Badge tone="slate">룰 기반</Badge>}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-sm font-semibold text-slate-700">
@@ -79,11 +88,17 @@ export default function ItemInputList({ items, onChange }: ItemInputListProps) {
         {name.trim() && (
           <p className="text-xs text-slate-500">
             자동 분류: <Badge tone="blue">{categoryLabels[classifyItem(name)]}</Badge>
+            <span className="ml-1 text-slate-400">— 추가 시 AI 분류를 시도해요</span>
           </p>
         )}
-        <Button size="sm" variant="secondary" onClick={addItem} disabled={!name.trim() || amount <= 0}>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={addItem}
+          disabled={!name.trim() || amount <= 0 || classifying}
+        >
           <span className="inline-flex items-center gap-1">
-            <Plus size={12} /> 품목 추가
+            <Plus size={12} /> {classifying ? '분류 중…' : '품목 추가'}
           </span>
         </Button>
       </div>

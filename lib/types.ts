@@ -42,6 +42,7 @@ export type ExpenseItem = {
   quantity?: number;
   category: ItemCategory;
   source: ItemSource;
+  classifiedBy?: 'llm' | 'rule'; // 분류 출처 (AI 분류 / 룰 기반) — 하이브리드 구조의 시각적 증거
 };
 
 export type Receipt = {

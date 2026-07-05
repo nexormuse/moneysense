@@ -49,13 +49,13 @@ flowchart TD
 | 현재 MVP | 금액(45)·날짜(25)·상호명 유사도(20)·결제수단(10) 점수제. 80점 이상 매칭/품목 보강, 50~79점 확인 필요(사용자 확정/거절), 50점 미만·현금은 직접 입력 소비 |
 | 실제 서비스 확장 | 금융 API/마이데이터로 실거래를 수신하고, 상호명 유사도를 임베딩 기반 비교로 고도화 |
 
-### 3. 품목 분류 Agent — `classifyItem`
+### 3. 품목 분류 Agent — `classifyItem`, `classifyItemWithLLM`
 
 | | |
 | --- | --- |
 | 역할 | 품목명을 필수 식료품/신선식품/간편식/간식·음료/생활용품 등으로 분류 |
-| 현재 MVP | 키워드 룰 기반 (`CATEGORY_RULES`) |
-| 실제 서비스 확장 | LLM 분류 Agent로 교체 — 신조어·브랜드명·복합 상품 대응 |
+| 현재 MVP | 샘플 데이터는 키워드 룰 기반(`CATEGORY_RULES`)으로 고정해 데모 결정성 유지. **사용자 직접 입력 품목은 LLM 분류 연동**(`app/api/classify` — `ANTHROPIC_API_KEY` 설정 시 활성화, 키 없음·오류·3초 타임아웃·스키마 검증 실패 시 룰 기반 폴백). UI에 "AI 분류"/"룰 기반" 출처 배지 표시 |
+| 실제 서비스 확장 | 전체 파이프라인에 LLM 분류 확대 — 신조어·브랜드명·복합 상품 대응 ([프롬프트 설계도](prompt-blueprint.md)) |
 
 ### 4. 생활비 온도 Agent — `computeFactors`, `calculateTemperature`, `buildTemperatureBreakdown`
 

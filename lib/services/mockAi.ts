@@ -44,6 +44,47 @@ export function classifyItem(name: string): ItemCategory {
   return 'other';
 }
 
+const VALID_CATEGORIES = new Set<ItemCategory>([
+  'essential',
+  'fresh_food',
+  'convenience_meal',
+  'snack_drink',
+  'daily_goods',
+  'adjustable',
+  'local_friendly',
+  'other',
+]);
+
+/**
+ * LLM 품목 분류 (사용자 직접 입력 품목 전용).
+ * 폴백 체인: API 키 없음 / 네트워크 오류 / 3초 타임아웃 / 스키마 검증 실패 → 룰 기반.
+ * 샘플 데모 데이터는 카테고리가 고정되어 있어 이 함수를 거치지 않는다 (데모 결정성 유지).
+ */
+export async function classifyItemWithLLM(
+  name: string,
+): Promise<{ category: ItemCategory; classifiedBy: 'llm' | 'rule' }> {
+  const fallback = { category: classifyItem(name), classifiedBy: 'rule' as const };
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    const response = await fetch('/api/classify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!response.ok) return fallback;
+    const data = (await response.json()) as { category?: string };
+    if (typeof data.category === 'string' && VALID_CATEGORIES.has(data.category as ItemCategory)) {
+      return { category: data.category as ItemCategory, classifiedBy: 'llm' };
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 /**
  * 품목 카테고리별 전통시장·동네가게 대체 가능성.
  * 신선식품·기본 식재료는 시장에서 살 수 있지만,

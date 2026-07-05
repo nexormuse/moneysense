@@ -96,3 +96,5 @@ flowchart TD
    - `generateActionPlans` / `generatePresentationSummary` → LLM 생성 호출
 3. **거래내역 소스 교체**: 현재 `sampleTransactions`를 주입하는 자리에 금융 API/마이데이터 응답을 넣으면 매칭 이후 파이프라인은 그대로 동작한다.
 4. **저장소 교체**: `localStorage` 직렬화 지점(`AppState`)이 한 곳이므로 DB API로 교체 용이하다.
+
+각 Agent를 LLM으로 교체할 때 사용할 프롬프트 설계(룰 기반의 실패 사례, system prompt, few-shot, 출력 스키마, 폴백 체인)는 [LLM 프롬프트 설계도](prompt-blueprint.md)에 정리했다. 원칙은 하나다 — **숫자는 코드가, 언어는 LLM이.**

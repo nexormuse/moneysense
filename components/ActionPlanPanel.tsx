@@ -1,13 +1,23 @@
-// 다음 장보기 플랜 + 지역상생 소비 카드
+// 다음 장보기 플랜 + 지역상생 소비 카드 + iM 적금 전환 CTA
 'use client';
 
-import { Leaf, ListChecks, PiggyBank } from 'lucide-react';
-import { Badge, Card } from './ui';
+import { Landmark, Leaf, ListChecks, PiggyBank, X } from 'lucide-react';
+import { useState } from 'react';
+import { Badge, Button, Card } from './ui';
 import type { AnalysisResult } from '@/lib/types';
 
 type ActionPlanPanelProps = {
   analysis: AnalysisResult;
 };
+
+/** savingHint 문구("약 8,000원 절약 예상")에서 금액 텍스트를 뽑는다 */
+function extractSavingAmount(analysis: AnalysisResult): string | null {
+  for (const plan of analysis.actionPlans) {
+    const matched = plan.savingHint?.match(/([\d,]+)원/);
+    if (matched) return matched[1];
+  }
+  return null;
+}
 
 export function LocalSpendingCard({ ratio }: { ratio: number }) {
   const percent = Math.round(ratio * 100);
@@ -37,6 +47,9 @@ export function LocalSpendingCard({ ratio }: { ratio: number }) {
 }
 
 export default function ActionPlanPanel({ analysis }: ActionPlanPanelProps) {
+  const [showSavingModal, setShowSavingModal] = useState(false);
+  const savingAmount = extractSavingAmount(analysis);
+
   return (
     <div className="grid grid-cols-1 gap-3">
       <Card>
@@ -79,9 +92,54 @@ export default function ActionPlanPanel({ analysis }: ActionPlanPanelProps) {
         <p className="mt-3 text-[11px] text-slate-400">
           * 예상 절약 금액은 입력된 기록으로 계산한 참고용 추정치예요.
         </p>
+
+        {/* 절약액 → iM 적금 전환 CTA (mock): 조언이 저축으로 이어지는 흐름을 화면으로 보여준다 */}
+        {savingAmount && (
+          <button
+            type="button"
+            onClick={() => setShowSavingModal(true)}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-700 active:scale-[0.98]"
+          >
+            <Landmark size={16} />
+            {savingAmount}원 아껴서 iM 적금하기
+          </button>
+        )}
       </Card>
 
       <LocalSpendingCard ratio={analysis.localSpendingRatio} />
+
+      {/* 적금 연결 안내 모달 (mock) */}
+      {showSavingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-5 backdrop-blur-sm">
+          <div className="w-full rounded-2xl bg-white p-5 shadow-xl">
+            <div className="flex items-start justify-between">
+              <span className="rounded-lg bg-sky-50 p-2 text-sky-600">
+                <Landmark size={20} />
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowSavingModal(false)}
+                className="text-slate-400 hover:text-slate-600"
+                aria-label="닫기"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p className="mt-3 text-base font-bold text-slate-900">머니센스 챌린지 적금</p>
+            <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
+              실제 서비스에서는 이 버튼이 iM뱅크 적금 계좌로 연결돼요. 플랜이 계산한 예상
+              절약액 {savingAmount}원을 그대로 자동이체해, 절약이 조언에서 끝나지 않고
+              저축으로 이어집니다.
+            </p>
+            <p className="mt-2 text-[11px] text-slate-400">
+              * 현재 MVP에서는 흐름을 보여주는 데모 화면이에요.
+            </p>
+            <Button size="lg" className="mt-4 w-full" onClick={() => setShowSavingModal(false)}>
+              확인
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -78,6 +78,8 @@ export const previousData: PreviousData = {
   convenienceMealCount: 1, // 지난주 컵라면 등 간편식 1회
   convenienceRatio: 0.12,  // 지난주 편의점 식비 비중 12%
   totalSpending: 64500,    // 지난주 총 지출 (이번 주 76,800원과 비교)
+  convenienceSpending: 7800, // 지난주 편의점 식비 금액
+  localRatio: 0.34,          // 지난주 지역가게 소비 비중 34% (이번 주 29%와 비교)
 };
 
 // ---------- 절약 시나리오 샘플 (지난주보다 지출이 줄어든 주) ----------
@@ -92,6 +94,8 @@ export const previousDataSaving: PreviousData = {
   convenienceMealCount: 3, // 지난주 간편식 3회
   convenienceRatio: 0.18,  // 지난주 편의점 식비 비중 18%
   totalSpending: 76800,    // 지난주 총 지출 (이번 주 48,800원과 비교)
+  convenienceSpending: 13800, // 지난주 편의점 식비 금액
+  localRatio: 0.2,            // 지난주 지역가게 소비 비중 20% (이번 주 33%와 비교)
 };
 
 export const sampleTransactionsSaving: Transaction[] = [

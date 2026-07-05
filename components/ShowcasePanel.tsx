@@ -89,9 +89,9 @@ function getScreenGuide(screen: AppScreen): ScreenGuide {
     title: '분석 결과 — 4단계 리포트',
     points: [
       '맨 위 요약에서 생활비 온도 · 상태 · 지난주 대비 증감을 한눈에 확인해요.',
-      '단계 버튼이나 "다음 단계" 버튼으로 매칭 → 온도 → 원인 → 플랜을 차례로 볼 수 있어요.',
-      'STEP 1에서 영수증 카드를 누르면 무엇을 샀는지 품목이 펼쳐져요.',
-      'STEP 4의 "비교 기준"에서 이번 주를 마감하면 다음 주엔 내 기록과 비교해요.',
+      'STEP 1 매칭에서 영수증 카드를 누르면 총액만 남았던 카드내역에 어떤 품목이 보강됐는지 보여요.',
+      'STEP 2 "왜 이 온도인가요?"는 기본 온도 + 요인별 가산값의 합이 곧 온도임을 보여줘요.',
+      'STEP 3에는 지난 소비와의 항목별 비교가, STEP 4에는 절약+지역상생 플랜과 발표용 요약이 있어요.',
     ],
   };
 }
@@ -160,27 +160,65 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
         <p className="text-xs font-bold tracking-widest text-emerald-600">
           AI 생활금융 에이전트
         </p>
-        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">머니센스</h1>
+        <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">머니센스</h1>
           <p className="text-sm font-medium text-slate-500">
             영수증과 거래내역으로 생활비가 오른 이유를 알려드립니다
           </p>
         </div>
+
+        {/* 3단 차별 포인트: 카드내역 확인 → 품목 복원 → 원인분해 */}
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {[
+            {
+              step: 1,
+              title: '카드내역 확인',
+              description: '어디서 얼마 썼는지만 남은 금융 데이터를 확인해요',
+            },
+            {
+              step: 2,
+              title: '영수증 품목 복원',
+              description: '총액만 보이던 소비에 실제 구매 품목을 연결해요',
+            },
+            {
+              step: 3,
+              title: '생활비 원인분해',
+              description: '왜 올랐는지 설명하고 다음 장보기 플랜을 제안해요',
+            },
+          ].map((point) => (
+            <div
+              key={point.step}
+              className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm"
+            >
+              <p className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[10px] text-white">
+                  {point.step}
+                </span>
+                {point.title}
+              </p>
+              <p className="mt-1 text-[11px] leading-snug text-slate-500">
+                {point.description}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* 현재 화면 안내: 왼쪽 휴대폰 화면을 따라 자동으로 바뀐다 */}
-      <section className="mt-5 shrink-0 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 p-5 text-white shadow-lg shadow-emerald-600/25">
-        <p className="flex items-center gap-2 text-[11px] font-bold tracking-widest text-emerald-100">
-          <MonitorSmartphone size={14} /> 지금 보고 있는 화면
-        </p>
-        <h2 className="mt-1.5 text-lg font-bold">{guide.title}</h2>
-        <ul className="mt-3 space-y-2">
+      <section className="mt-4 shrink-0 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 p-4 text-white shadow-lg shadow-emerald-600/25">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="flex items-center gap-2 text-[11px] font-bold tracking-widest text-emerald-100">
+            <MonitorSmartphone size={14} /> 지금 보고 있는 화면
+          </p>
+          <h2 className="text-base font-bold">{guide.title}</h2>
+        </div>
+        <ul className="mt-2.5 space-y-1.5">
           {guide.points.map((point) => (
             <li
               key={point}
-              className="flex items-start gap-2 text-sm leading-relaxed text-emerald-50/95"
+              className="flex items-start gap-2 text-[13px] leading-snug text-emerald-50/95"
             >
-              <ArrowRight size={13} className="mt-1 shrink-0 text-emerald-200" />
+              <ArrowRight size={13} className="mt-0.5 shrink-0 text-emerald-200" />
               {point}
             </li>
           ))}
@@ -188,7 +226,7 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
       </section>
 
       {/* 서비스 참고 정보: 탭으로 구분 */}
-      <section className="mt-5 flex min-h-0 flex-1 flex-col">
+      <section className="mt-4 flex min-h-0 flex-1 flex-col">
         <div className="flex shrink-0 items-center gap-2">
           <h2 className="text-sm font-bold text-slate-900">서비스 참고</h2>
           <span className="h-px flex-1 bg-slate-200" />
@@ -211,31 +249,31 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
           </div>
         </div>
 
-        <div className="mt-3 min-h-0 flex-1 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mt-2.5 min-h-0 flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           {/* 소개 */}
           {referenceTab === 'intro' && (
-            <div className="space-y-4">
-              <p className="text-sm leading-relaxed text-slate-600">
+            <div className="space-y-3">
+              <p className="text-[13px] leading-snug text-slate-600">
                 카드·계좌 내역에는{' '}
                 <b className="text-slate-900">&ldquo;iM마트 41,000원&rdquo;</b>처럼 총액만
-                남습니다. 머니센스는 영수증을 연결해 총액 뒤에 숨은 품목 단위 소비를 복원하고,
-                생활비 상승의 원인을 분해한 뒤 다음 장보기 플랜까지 제안합니다.
+                남습니다. 머니센스는 영수증으로 품목 단위 소비를 복원하고, 생활비 상승의 원인을
+                분해한 뒤 다음 장보기 플랜까지 제안합니다.
               </p>
               <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-2">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="mb-1.5 text-[11px] font-bold text-slate-400">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="mb-1 text-[11px] font-bold text-slate-400">
                     카드·계좌 거래내역
                   </p>
                   <p className="text-sm font-bold text-slate-700">iM마트 41,000원</p>
-                  <p className="mt-1 text-xs text-slate-400">총액만 남아요</p>
+                  <p className="mt-0.5 text-xs text-slate-400">총액만 남아요</p>
                 </div>
                 <div className="flex items-center justify-center text-emerald-500">
                   <ArrowRight size={18} />
                 </div>
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                  <p className="mb-1.5 text-[11px] font-bold text-emerald-600">+ 영수증 연결</p>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                  <p className="mb-1 text-[11px] font-bold text-emerald-600">+ 영수증 연결</p>
                   <p className="text-sm font-bold text-slate-700">우유 3,200 · 계란 7,800 …</p>
-                  <p className="mt-1 text-xs text-emerald-700">품목 단위로 복원돼요</p>
+                  <p className="mt-0.5 text-xs text-emerald-700">품목 단위로 복원돼요</p>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -246,7 +284,7 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
                 ].map((chip) => (
                   <div
                     key={chip.label}
-                    className="rounded-xl bg-gradient-to-b from-emerald-50 to-white p-3 text-center ring-1 ring-emerald-100"
+                    className="rounded-xl bg-gradient-to-b from-emerald-50 to-white p-2.5 text-center ring-1 ring-emerald-100"
                   >
                     <p className="text-base font-bold text-emerald-700">{chip.value}</p>
                     <p className="mt-0.5 text-[11px] font-medium text-slate-500">{chip.label}</p>
@@ -258,22 +296,22 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
 
           {/* 동작 방식 */}
           {referenceTab === 'how' && (
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-2">
               {steps.map((step, index) => (
                 <div
                   key={step.title}
-                  className="rounded-xl border border-slate-200 bg-gradient-to-b from-slate-50/80 to-white p-4"
+                  className="rounded-xl border border-slate-200 bg-gradient-to-b from-slate-50/80 to-white p-3"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm">
                       {step.icon}
                     </span>
                     <span className="text-[11px] font-bold tracking-wide text-emerald-600">
                       STEP {index + 1}
                     </span>
                   </div>
-                  <p className="mt-2.5 text-sm font-bold text-slate-800">{step.title}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                  <p className="mt-2 text-sm font-bold text-slate-800">{step.title}</p>
+                  <p className="mt-0.5 text-xs leading-snug text-slate-500">
                     {step.description}
                   </p>
                 </div>
@@ -283,7 +321,7 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
 
           {/* 생활비 온도 */}
           {referenceTab === 'temperature' && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {/* 가로 온도계 */}
               <div>
                 <div className="flex h-3 overflow-hidden rounded-full">
@@ -306,11 +344,11 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
                 {temperatureFactors.map((factor) => (
                   <div
                     key={factor.name}
-                    className="flex items-start justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3"
+                    className="flex items-start justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-2.5"
                   >
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-slate-700">{factor.name}</p>
-                      <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
+                      <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
                         {factor.description}
                       </p>
                     </div>
@@ -319,8 +357,8 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
                     </span>
                   </div>
                 ))}
-                <div className="flex items-center justify-center rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50 p-3">
-                  <p className="text-center text-[11px] font-medium leading-relaxed text-emerald-700">
+                <div className="flex items-center justify-center rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50 p-2.5">
+                  <p className="text-center text-[11px] font-medium leading-snug text-emerald-700">
                     기본 <b className="text-sm">35℃</b>에서 시작 —<br />
                     높을수록 생활비를 돌아볼 신호예요
                   </p>
@@ -335,13 +373,13 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
               {features.map((feature) => (
                 <div
                   key={feature.title}
-                  className="rounded-xl border border-slate-200 bg-slate-50/60 p-3"
+                  className="rounded-xl border border-slate-200 bg-slate-50/60 p-2.5"
                 >
                   <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
                     <Leaf size={12} className="shrink-0 text-emerald-500" />
                     {feature.title}
                   </p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                  <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
                     {feature.description}
                   </p>
                 </div>

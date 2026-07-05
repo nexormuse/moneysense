@@ -44,6 +44,8 @@ export default function AmountQuickButtons({
           원
         </span>
       </div>
+      {/* 빠른 금액 버튼: 누를 때마다 현재 금액에 누적 */}
+      {!compact && <p className="text-[11px] font-medium text-slate-400">빠른 금액 입력</p>}
       <div className="flex flex-wrap gap-1.5">
         {steps.map((step) => (
           <button

@@ -4,11 +4,13 @@ import type {
   ActionPlan,
   AnalysisResult,
   CauseDetail,
+  ComparisonInsight,
   ItemCategory,
   MatchOverride,
   MatchResult,
   PreviousData,
   Receipt,
+  TemperatureFactorItem,
   Transaction,
   UserBaseline,
 } from '../types';
@@ -120,6 +122,8 @@ export function matchReceiptsToTransactions(
     if (best && score >= 80) {
       usedTransactionIds.add(best.tx.id);
       const hasItems = receipt.items.length > 0;
+      // 품목 보강 메시지: "총액만 남은 카드내역 → 품목 복원"이 드러나게 쓴다
+      const itemNames = receipt.items.slice(0, 4).map((item) => item.name).join('·');
       return {
         receiptId: receipt.id,
         transactionId: best.tx.id,
@@ -127,7 +131,7 @@ export function matchReceiptsToTransactions(
         status: hasItems ? ('item_enriched' as const) : ('matched' as const),
         score,
         message: hasItems
-          ? `${best.tx.merchantName} 카드 거래와 매칭되어 품목 ${receipt.items.length}건으로 거래 정보를 보강했습니다.`
+          ? `카드내역에는 ${best.tx.merchantName} ${formatWon(best.tx.amount)} 총액만 있었어요. 영수증으로 ${itemNames}${receipt.items.length > 4 ? ' 등' : ''} ${receipt.items.length}개 품목 정보를 보강했습니다.`
           : `${best.tx.merchantName} 카드 거래와 매칭을 완료했습니다.`,
       };
     }
@@ -146,7 +150,8 @@ export function matchReceiptsToTransactions(
       receiptId: receipt.id,
       status: 'manual_entry' as const,
       score,
-      message: '입력된 거래내역에서는 찾지 못했습니다. 직접 입력 소비로 기록했습니다.',
+      message:
+        '입력된 카드·계좌 거래내역에서는 같은 거래를 찾지 못했습니다. 현금 또는 다른 결제수단 소비로 기록했습니다.',
     };
   });
 }
@@ -227,11 +232,20 @@ export function buildBaseline(receipts: Receipt[], savedAt: string): UserBaselin
     )
     .reduce((sum, receipt) => sum + receipt.totalAmount, 0);
 
+  const localSpending = receipts
+    .filter(
+      (receipt) =>
+        receipt.storeType === 'traditional_market' || receipt.storeType === 'local_store',
+    )
+    .reduce((sum, receipt) => sum + receipt.totalAmount, 0);
+
   return {
     prices,
     convenienceMealCount,
     convenienceRatio: convenienceSpending / totalSpending,
     totalSpending: receipts.reduce((sum, receipt) => sum + receipt.totalAmount, 0),
+    convenienceSpending,
+    localRatio: localSpending / totalSpending,
     savedAt,
   };
 }
@@ -260,6 +274,9 @@ type TemperatureFactors = {
   quantityDecreaseDetails: string[];
   storeDecreaseDetails: string[];
   previousConvenienceMealCount: number;
+  // 비교 카드용 원자료
+  convenienceSpendingWon: number; // 이번 주 편의점·프랜차이즈 지출 금액
+  priceTopChange: { name: string; prev: number; cur: number } | null; // 단가 변화가 가장 큰 품목
 };
 
 /** 온도 가산 요인을 계산한다 (원인분해와 온도 계산이 함께 사용) */
@@ -277,6 +294,7 @@ function computeFactors(
   const priceDetails: string[] = [];
   const priceDecreaseDetails: string[] = [];
   const newBaselineItems: string[] = [];
+  let priceTopChange: { name: string; prev: number; cur: number } | null = null;
   for (const item of allItems) {
     const prevPrice = previous.prices[item.name.replace(/\s/g, '')];
     if (prevPrice === undefined) {
@@ -284,6 +302,13 @@ function computeFactors(
       continue;
     }
     const diff = item.amount - prevPrice;
+    // 단가 변화 폭이 가장 큰 품목을 비교 카드용으로 기억한다
+    if (
+      diff !== 0 &&
+      (!priceTopChange || Math.abs(diff) > Math.abs(priceTopChange.cur - priceTopChange.prev))
+    ) {
+      priceTopChange = { name: item.name, prev: prevPrice, cur: item.amount };
+    }
     if (diff > 0) {
       priceIncreaseWon += diff;
       priceDetails.push(`${item.name} +${formatWon(diff)} (${formatWon(prevPrice)} → ${formatWon(item.amount)})`);
@@ -378,6 +403,8 @@ function computeFactors(
     quantityDecreaseDetails,
     storeDecreaseDetails,
     previousConvenienceMealCount: previous.convenienceMealCount,
+    convenienceSpendingWon: convenienceSpending,
+    priceTopChange,
   };
 }
 
@@ -398,6 +425,155 @@ function temperatureLabel(temp: number): AnalysisResult['temperatureLabel'] {
   if (temp < 70) return '관심';
   if (temp < 85) return '주의';
   return '뜨거움';
+}
+
+// ---------- 생활비 온도 계산 근거 ("왜 이 온도인가요?") ----------
+
+/**
+ * 온도 계산 근거를 항목별로 만든다. delta 합계가 곧 생활비 온도가 되어
+ * 온도가 임의 숫자가 아니라 계산된 결과임을 보여준다.
+ */
+export function buildTemperatureBreakdown(factors: TemperatureFactors): TemperatureFactorItem[] {
+  const rows: TemperatureFactorItem[] = [
+    {
+      id: 'base',
+      label: '기본 온도',
+      delta: 35,
+      description: '모든 분석이 시작되는 기준값이에요.',
+    },
+  ];
+
+  if (factors.priceIncrease > 0) {
+    const names = factors.priceDetails.map((detail) => detail.split(' ')[0]).join('·');
+    rows.push({
+      id: 'price',
+      label: `${names} 단가 상승`,
+      delta: factors.priceIncrease,
+      description: factors.priceDetails.join(', '),
+    });
+  }
+  if (factors.quantityIncrease > 0) {
+    rows.push({
+      id: 'quantity',
+      label: '편의점 간편식 구매 증가',
+      delta: factors.quantityIncrease,
+      description: factors.quantityDetails[0] ?? '간편식 구매 횟수가 늘었어요.',
+    });
+  }
+  if (factors.storeShift > 0) {
+    rows.push({
+      id: 'store',
+      label: '소비처 변화 (편의점 비중 증가)',
+      delta: factors.storeShift,
+      description: factors.storeDetails[0] ?? '편의점·프랜차이즈 비중이 늘었어요.',
+    });
+  }
+  if (factors.adjustableSpending > 0) {
+    rows.push({
+      id: 'adjustable',
+      label: '간식·음료 등 조정 가능한 소비',
+      delta: factors.adjustableSpending,
+      description: factors.adjustableDetails[0] ?? '조정 가능한 소비가 차지하는 비중이에요.',
+    });
+  }
+  if (factors.unmatchedRatio > 0) {
+    rows.push({
+      id: 'unmatched',
+      label: '직접 입력(현금 등) 소비 비중',
+      delta: factors.unmatchedRatio,
+      description: '거래내역에 없는 소비는 변동 가능성을 조금 더 반영해요.',
+    });
+  }
+
+  return rows;
+}
+
+// ---------- 지난 소비 vs 이번 소비 비교 ----------
+
+/** 지난 기록과 이번 주를 항목별로 비교해 온도 원인과 연결되는 인사이트를 만든다 */
+export function buildComparisons(
+  factors: TemperatureFactors,
+  previous: PreviousData,
+  localSpendingRatio: number,
+): ComparisonInsight[] {
+  const insights: ComparisonInsight[] = [];
+
+  // 1) 편의점 식비 금액
+  if (previous.convenienceSpending !== undefined) {
+    const diff = factors.convenienceSpendingWon - previous.convenienceSpending;
+    if (diff !== 0) {
+      insights.push({
+        id: 'convenience-spending',
+        label: '편의점 식비',
+        previousLabel: formatWon(previous.convenienceSpending),
+        currentLabel: formatWon(factors.convenienceSpendingWon),
+        changeLabel: `${diff > 0 ? '+' : '-'}${formatWon(Math.abs(diff))}`,
+        changeDirection: diff > 0 ? 'up' : 'down',
+        description:
+          diff > 0
+            ? `소비처 변화 +${factors.storeShift}℃의 배경이 된 변화예요.`
+            : '편의점 소비를 줄인 것이 이번 주 절약의 큰 배경이에요.',
+      });
+    }
+  }
+
+  // 2) 단가 변화가 가장 큰 품목
+  if (factors.priceTopChange) {
+    const { name, prev, cur } = factors.priceTopChange;
+    const diff = cur - prev;
+    insights.push({
+      id: 'price-top',
+      label: `${name} 가격`,
+      previousLabel: formatWon(prev),
+      currentLabel: formatWon(cur),
+      changeLabel: `${diff > 0 ? '+' : '-'}${formatWon(Math.abs(diff))}`,
+      changeDirection: diff > 0 ? 'up' : 'down',
+      description:
+        diff > 0
+          ? `가격 상승 +${factors.priceIncrease}℃에 반영된 대표 품목이에요.`
+          : '행사·대체 구매로 단가를 낮춘 대표 품목이에요.',
+    });
+  }
+
+  // 3) 간편식 구매 횟수
+  if (factors.convenienceMealCount !== factors.previousConvenienceMealCount) {
+    const diff = factors.convenienceMealCount - factors.previousConvenienceMealCount;
+    insights.push({
+      id: 'convenience-count',
+      label: '간편식 구매',
+      previousLabel: `${factors.previousConvenienceMealCount}회`,
+      currentLabel: `${factors.convenienceMealCount}회`,
+      changeLabel: `${diff > 0 ? '+' : '-'}${Math.abs(diff)}회`,
+      changeDirection: diff > 0 ? 'up' : 'down',
+      description:
+        diff > 0
+          ? `구매량 증가 +${factors.quantityIncrease}℃로 이어진 변화예요.`
+          : '간편식을 줄인 만큼 생활비 온도도 낮게 유지됐어요.',
+    });
+  }
+
+  // 4) 지역가게(전통시장·동네가게) 소비 비중
+  if (previous.localRatio !== undefined) {
+    const prevPct = Math.round(previous.localRatio * 100);
+    const curPct = Math.round(localSpendingRatio * 100);
+    if (prevPct !== curPct) {
+      const diff = curPct - prevPct;
+      insights.push({
+        id: 'local-ratio',
+        label: '지역가게 소비 비중',
+        previousLabel: `${prevPct}%`,
+        currentLabel: `${curPct}%`,
+        changeLabel: `${diff > 0 ? '+' : '-'}${Math.abs(diff)}%p`,
+        changeDirection: diff > 0 ? 'up' : 'down',
+        description:
+          diff > 0
+            ? '동네시장·동네가게 소비가 늘어 지역상생에도 힘이 됐어요.'
+            : '동네시장·동네가게 소비 비중이 줄었어요. 다음 장보기에서 회복을 제안해요.',
+      });
+    }
+  }
+
+  return insights;
 }
 
 // ---------- 원인분해 ----------
@@ -481,6 +657,7 @@ export function generateActionPlans(
   receipts: Receipt[],
   factors: TemperatureFactors,
   spendingDelta = 0,
+  localSpendingRatio = 0,
 ): ActionPlan[] {
   const plans: ActionPlan[] = [];
 
@@ -532,6 +709,16 @@ export function generateActionPlans(
     isLocal: true,
   });
 
+  // 4) 동일 예산 안에서 지역상생 비중을 높이는 전환 제안
+  if (localSpendingRatio > 0 && localSpendingRatio < 0.5) {
+    const currentPct = Math.round(localSpendingRatio * 100);
+    const targetPct = Math.min(currentPct + 13, 60);
+    plans.push({
+      text: `동일 예산 안에서 장보기 일부를 동네시장으로 옮기면 지역상생 소비 비중을 ${currentPct}%에서 약 ${targetPct}%까지 높일 수 있어요.`,
+      isLocal: true,
+    });
+  }
+
   // 플랜이 부족하면 기본 제안으로 채운다
   if (plans.length < 3) {
     plans.push({
@@ -539,7 +726,7 @@ export function generateActionPlans(
     });
   }
 
-  return plans.slice(0, 3);
+  return plans.slice(0, 4);
 }
 
 // ---------- 요약 메시지 ----------
@@ -558,6 +745,56 @@ export function generateSummaryMessage(
     return `지난주보다 ${formatWon(Math.abs(spendingDelta))}을 아꼈어요. 가장 큰 절약 요인은 "${mainReasons[0]}"이에요.`;
   }
   return `이번 주 생활비 온도는 ${temperature}℃ (${label}) — 가장 큰 요인은 "${mainReasons[0]}"이에요.`;
+}
+
+// ---------- 발표용 요약 ----------
+
+/**
+ * mock AI: 발표용 3~4문장 요약을 생성한다.
+ * "총액만 남은 카드내역 → 영수증 품목 복원 → 온도 변화 원인 → 다음 행동 제안" 흐름을 담는다.
+ */
+export function generatePresentationSummary(
+  receipts: Receipt[],
+  matchResults: MatchResult[],
+  temperature: number,
+  label: AnalysisResult['temperatureLabel'],
+  mainReasons: string[],
+  spendingDelta: number,
+  factors: TemperatureFactors,
+): string {
+  if (receipts.length === 0) return '';
+
+  // 문장 1: 총액만 남아 있던 카드내역 (매칭된 영수증 중 금액이 큰 2건)
+  const matchedReceipts = matchResults
+    .filter((match) => match.transactionId && (match.status === 'matched' || match.status === 'item_enriched'))
+    .map((match) => receipts.find((receipt) => receipt.id === match.receiptId))
+    .filter((receipt): receipt is Receipt => Boolean(receipt))
+    .sort((a, b) => b.totalAmount - a.totalAmount)
+    .slice(0, 2);
+  const sentence1 =
+    matchedReceipts.length > 0
+      ? `카드내역에는 ${matchedReceipts.map((receipt) => `${receipt.storeName} ${formatWon(receipt.totalAmount)}`).join(', ')}처럼 총액만 남아 있었어요.`
+      : '카드·계좌 내역에는 어디서 얼마 썼는지 총액만 남아 있었어요.';
+
+  // 문장 2: 품목 복원 + 온도 변화의 원인
+  const reasonPhrase =
+    mainReasons.length > 0
+      ? `'${mainReasons[0]}'${mainReasons[1] ? `, '${mainReasons[1]}'` : ''}`
+      : '';
+  const sentence2 =
+    spendingDelta < 0
+      ? `머니센스는 영수증 ${receipts.length}장으로 품목 정보를 복원했고, 지난주보다 ${formatWon(Math.abs(spendingDelta))}을 아낀 비결이 ${reasonPhrase || '장보기 패턴의 변화'} 덕분임을 확인했어요.`
+      : `머니센스는 영수증 ${receipts.length}장으로 품목 정보를 복원했고, 생활비 온도가 ${temperature}℃(${label})까지 오른 이유가 ${reasonPhrase || '소비 패턴의 변화'} 때문임을 확인했어요.`;
+
+  // 문장 3: 다음 행동 제안
+  const sentence3 =
+    spendingDelta < 0
+      ? '다음 주에도 간편식을 줄인 장보기 패턴을 유지하고, 동네시장 소비 비중을 이어가는 플랜을 제안해요.'
+      : factors.convenienceMealCount >= 2
+        ? `다음 주에는 편의점 간편식 ${Math.min(2, factors.convenienceMealCount)}회를 장보기 식재료로 바꾸고, 채소·두부·과일은 동네시장 장보기를 유지하는 플랜을 제안해요.`
+        : '다음 주에는 장보기 목록을 미리 만들어 반복 소액 소비를 줄이는 플랜을 제안해요.';
+
+  return `${sentence1} ${sentence2} ${sentence3}`;
 }
 
 // ---------- 전체 분석 파이프라인 ----------
@@ -646,7 +883,7 @@ export function analyzeAll(
       .map((reason) => reason.text);
   }
 
-  const actionPlans = generateActionPlans(receipts, factors, spendingDelta);
+  const actionPlans = generateActionPlans(receipts, factors, spendingDelta, localSpendingRatio);
 
   const analysis: AnalysisResult = {
     temperature,
@@ -663,6 +900,17 @@ export function analyzeAll(
     actionPlans,
     summaryMessage: generateSummaryMessage(temperature, label, mainReasons, spendingDelta),
     spendingDelta,
+    temperatureBreakdown: buildTemperatureBreakdown(factors),
+    comparisons: buildComparisons(factors, previous, localSpendingRatio),
+    presentationSummary: generatePresentationSummary(
+      receipts,
+      matchResults,
+      temperature,
+      label,
+      mainReasons,
+      spendingDelta,
+      factors,
+    ),
   };
 
   return { matchResults, analysis };

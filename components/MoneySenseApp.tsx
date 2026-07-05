@@ -17,12 +17,16 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ActionPlanPanel from './ActionPlanPanel';
+import AgentFlowCard from './AgentFlowCard';
 import BaselineCard from './BaselineCard';
 import CauseBreakdownCards from './CauseBreakdownCards';
+import ComparisonPanel from './ComparisonPanel';
 import ManualExpenseForm from './ManualExpenseForm';
 import MatchResultPanel from './MatchResultPanel';
+import PresentationSummaryCard from './PresentationSummaryCard';
 import ReceiptCard from './ReceiptCard';
 import ReceiptInputPanel from './ReceiptInputPanel';
+import TemperatureBreakdown from './TemperatureBreakdown';
 import TemperatureCard from './TemperatureCard';
 import TransactionPanel from './TransactionPanel';
 import { Badge, Button, Card, EmptyState } from './ui';
@@ -138,6 +142,11 @@ export default function MoneySenseApp({ onScreenChange }: MoneySenseAppProps) {
   // 홈 화면 소비 비교: 지난 소비(비교 기준) vs 이번 소비(현재 영수증 합계)
   const currentTotal = receipts.reduce((sum, receipt) => sum + receipt.totalAmount, 0);
   const previousTotal = (baseline ?? previousData).totalSpending ?? 0;
+
+  // AI Agent 분석 흐름 카드용: 매칭 완료·품목 보강 건수
+  const matchedCount = matchResults.filter(
+    (match) => match.status === 'matched' || match.status === 'item_enriched',
+  ).length;
 
   // 샘플 데모 데이터 로딩 (데모 수치가 항상 같게 나오도록 판정·기준도 초기화)
   // 'increase': 지출이 늘어난 주, 'saving': 지출을 아낀 주
@@ -365,6 +374,14 @@ export default function MoneySenseApp({ onScreenChange }: MoneySenseAppProps) {
                   </p>
                 )}
               </section>
+
+              {/* AI Agent 분석 흐름: 실제 수치가 들어간 5단계 */}
+              <AgentFlowCard
+                receiptsCount={receipts.length}
+                transactionsCount={transactions.length}
+                matchedCount={matchedCount}
+                analysis={analysis}
+              />
 
               {/* 원인 미리보기: 주요 원인 3개 + 자세히 보기 유도 */}
               {analysis.mainReasons.length > 0 && (
@@ -688,16 +705,32 @@ export default function MoneySenseApp({ onScreenChange }: MoneySenseAppProps) {
                     onResetOverride={resetOverride}
                   />
                 )}
-                {resultStep === 2 && <TemperatureCard analysis={analysis} />}
+                {resultStep === 2 && (
+                  <div className="space-y-4">
+                    <TemperatureCard analysis={analysis} />
+                    {/* 온도 계산 근거: 기본 온도 + 요인별 가산 = 최종 온도 */}
+                    <TemperatureBreakdown
+                      breakdown={analysis.temperatureBreakdown}
+                      temperature={analysis.temperature}
+                      temperatureLabel={analysis.temperatureLabel}
+                    />
+                  </div>
+                )}
                 {resultStep === 3 && (
-                  <CauseBreakdownCards
-                    causeDetails={analysis.causeDetails}
-                    saving={analysis.spendingDelta < 0}
-                  />
+                  <div className="space-y-4">
+                    <CauseBreakdownCards
+                      causeDetails={analysis.causeDetails}
+                      saving={analysis.spendingDelta < 0}
+                    />
+                    {/* 지난 소비 vs 이번 소비: 숫자 변화가 원인으로 이어지는 근거 */}
+                    <ComparisonPanel comparisons={analysis.comparisons} />
+                  </div>
                 )}
                 {resultStep === 4 && (
                   <div className="space-y-4">
                     <ActionPlanPanel analysis={analysis} />
+                    {/* 발표용 요약: 총액 → 품목 복원 → 원인 → 다음 행동 */}
+                    <PresentationSummaryCard summary={analysis.presentationSummary} />
                     <BaselineCard
                       baseline={baseline}
                       onSaveBaseline={saveBaseline}

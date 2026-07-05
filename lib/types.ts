@@ -95,6 +95,33 @@ export type ActionPlan = {
   isLocal?: boolean; // 지역상생 전환 제안 여부
 };
 
+// 생활비 온도 계산 근거 1줄 ("왜 이 온도인가요?" 카드)
+export type TemperatureFactorItem = {
+  id: string;
+  label: string;       // 예: "우유·계란 단가 상승"
+  delta: number;       // 온도 기여값 (기본 온도 35 포함)
+  description: string; // 근거 설명
+};
+
+// 지난 소비 vs 이번 소비 비교 1줄
+export type ComparisonInsight = {
+  id: string;
+  label: string;          // 예: "편의점 식비"
+  previousLabel: string;  // 예: "7,800원"
+  currentLabel: string;   // 예: "13,800원"
+  changeLabel: string;    // 예: "+6,000원"
+  changeDirection: 'up' | 'down';
+  description: string;    // 생활비 온도와의 연결 설명
+};
+
+// AI Agent 분석 흐름 1단계
+export type AgentStep = {
+  id: string;
+  title: string;
+  description: string;
+  status: 'done' | 'active' | 'pending';
+};
+
 export type AnalysisResult = {
   temperature: number;
   temperatureLabel: '안정' | '관심' | '주의' | '뜨거움';
@@ -110,6 +137,9 @@ export type AnalysisResult = {
   actionPlans: ActionPlan[];
   summaryMessage: string;
   spendingDelta: number; // 지난주 대비 지출 증감 (음수 = 절약). 비교 기준 없으면 0
+  temperatureBreakdown: TemperatureFactorItem[]; // 온도 계산 근거 (합계 = 온도)
+  comparisons: ComparisonInsight[];              // 지난 소비 vs 이번 소비 비교
+  presentationSummary: string;                   // 발표용 3~4문장 요약
 };
 
 // 이전 구매 기록 (가격/구매 패턴 비교 기준)
@@ -118,6 +148,8 @@ export type PreviousData = {
   convenienceMealCount: number;   // 지난주 간편식 구매 횟수
   convenienceRatio: number;       // 지난주 편의점 식비 비중 (0~1)
   totalSpending?: number;         // 지난주 총 지출 (홈의 지난 소비 → 이번 소비 비교용)
+  convenienceSpending?: number;   // 지난주 편의점 식비 금액 (비교 카드용)
+  localRatio?: number;            // 지난주 지역가게(전통시장·동네가게) 소비 비중 (0~1)
 };
 
 // 사용자가 직접 저장한 주간 비교 기준 (샘플 previousData를 대체)

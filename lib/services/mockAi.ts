@@ -5,6 +5,7 @@ import type {
   AnalysisResult,
   CauseDetail,
   ComparisonInsight,
+  ExpenseItem,
   ItemCategory,
   MatchOverride,
   MatchResult,
@@ -42,6 +43,16 @@ export function classifyItem(name: string): ItemCategory {
   }
   return 'other';
 }
+
+/**
+ * 품목 카테고리별 전통시장·동네가게 대체 가능성.
+ * 신선식품·기본 식재료는 시장에서 살 수 있지만,
+ * 공산품·브랜드 상품(세제, 밀키트, 브랜드 간식 등)은 억지로 전환을 제안하지 않는다.
+ */
+const SUBSTITUTABLE_CATEGORIES: ReadonlySet<ItemCategory> = new Set(['essential', 'fresh_food']);
+
+export const isSubstitutableItem = (item: ExpenseItem) =>
+  SUBSTITUTABLE_CATEGORIES.has(item.category);
 
 export const categoryLabels: Record<ItemCategory, string> = {
   essential: '필수 식료품',
@@ -710,13 +721,41 @@ export function generateActionPlans(
   });
 
   // 4) 동일 예산 안에서 지역상생 비중을 높이는 전환 제안
-  if (localSpendingRatio > 0 && localSpendingRatio < 0.5) {
+  //    대체 가능한 품목(신선식품·기본 식재료)의 금액만 전환 대상으로 계산해 제안의 근거를 보여준다.
+  //    세제·밀키트 같은 공산품·브랜드 상품을 시장에서 사라고 제안하는 실수를 막는다.
+  const totalSpending = receipts.reduce((sum, receipt) => sum + receipt.totalAmount, 0) || 1;
+  const localSpending = receipts
+    .filter(
+      (receipt) =>
+        receipt.storeType === 'traditional_market' || receipt.storeType === 'local_store',
+    )
+    .reduce((sum, receipt) => sum + receipt.totalAmount, 0);
+  const substitutableItems = receipts
+    .filter(
+      (receipt) =>
+        receipt.storeType !== 'traditional_market' && receipt.storeType !== 'local_store',
+    )
+    .flatMap((receipt) => receipt.items)
+    .filter(isSubstitutableItem);
+  const substitutableTotal = substitutableItems.reduce((sum, item) => sum + item.amount, 0);
+  if (substitutableTotal > 0 && localSpendingRatio < 0.5) {
     const currentPct = Math.round(localSpendingRatio * 100);
-    const targetPct = Math.min(currentPct + 13, 60);
-    plans.push({
-      text: `동일 예산 안에서 장보기 일부를 동네시장으로 옮기면 지역상생 소비 비중을 ${currentPct}%에서 약 ${targetPct}%까지 높일 수 있어요.`,
-      isLocal: true,
-    });
+    // 대체 가능 품목을 모두 옮겼을 때의 비중이 상한. 전량 전환은 비현실적이므로 60%로 제한한다
+    const targetPct = Math.min(
+      Math.floor(((localSpending + substitutableTotal) / totalSpending) * 100),
+      60,
+    );
+    if (targetPct > currentPct) {
+      const topNames = [...substitutableItems]
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 2)
+        .map((item) => item.name)
+        .join('·');
+      plans.push({
+        text: `이번 장보기에서 대체 가능한 품목(${topNames} 등 ${formatWon(substitutableTotal)}) 중 일부를 동네시장으로 옮기면 지역상생 소비 비중을 ${currentPct}%에서 약 ${targetPct}%까지 높일 수 있어요.`,
+        isLocal: true,
+      });
+    }
   }
 
   // 플랜이 부족하면 기본 제안으로 채운다

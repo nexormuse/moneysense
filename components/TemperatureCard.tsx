@@ -64,7 +64,9 @@ export default function TemperatureCard({ analysis }: TemperatureCardProps) {
 
           {mainReasons.length > 0 && (
             <div className="mt-4">
-              <p className="text-xs font-medium text-slate-400 mb-1.5">주요 원인</p>
+              <p className="text-xs font-medium text-slate-400 mb-1.5">
+                {analysis.spendingDelta < 0 ? '주요 절약 요인' : '주요 원인'}
+              </p>
               <ol className="space-y-1">
                 {mainReasons.map((reason, index) => (
                   <li key={reason} className="flex items-start gap-2 text-sm text-slate-700">

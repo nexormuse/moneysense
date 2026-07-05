@@ -253,6 +253,13 @@ type TemperatureFactors = {
   convenienceMealTotal: number;
   currentConvenienceRatio: number;
   adjustableRatio: number;
+  // 절약(감소) 분석: 지난 기록보다 줄어든 요인
+  priceDecreaseWon: number;
+  priceDecreaseDetails: string[];
+  quantityDecreaseCount: number;
+  quantityDecreaseDetails: string[];
+  storeDecreaseDetails: string[];
+  previousConvenienceMealCount: number;
 };
 
 /** 온도 가산 요인을 계산한다 (원인분해와 온도 계산이 함께 사용) */
@@ -264,9 +271,11 @@ function computeFactors(
   const allItems = receipts.flatMap((receipt) => receipt.items);
   const totalSpending = receipts.reduce((sum, receipt) => sum + receipt.totalAmount, 0) || 1;
 
-  // 1) 가격 상승: 이전 가격 기록이 있는 품목의 단가 상승분 합산 (100원당 1점, 최대 20점)
+  // 1) 가격 상승/하락: 이전 가격 기록이 있는 품목의 단가 변화 (상승은 100원당 1점, 최대 20점)
   let priceIncreaseWon = 0;
+  let priceDecreaseWon = 0;
   const priceDetails: string[] = [];
+  const priceDecreaseDetails: string[] = [];
   const newBaselineItems: string[] = [];
   for (const item of allItems) {
     const prevPrice = previous.prices[item.name.replace(/\s/g, '')];
@@ -278,30 +287,47 @@ function computeFactors(
     if (diff > 0) {
       priceIncreaseWon += diff;
       priceDetails.push(`${item.name} +${formatWon(diff)} (${formatWon(prevPrice)} → ${formatWon(item.amount)})`);
+    } else if (diff < 0) {
+      priceDecreaseWon += -diff;
+      priceDecreaseDetails.push(
+        `${item.name} -${formatWon(-diff)} (${formatWon(prevPrice)} → ${formatWon(item.amount)})`,
+      );
     }
   }
   const priceIncrease = clamp(Math.round(priceIncreaseWon / 100), 0, 20);
 
-  // 2) 구매량 증가: 간편식 구매 횟수를 지난주와 비교 (증가 1회당 4점, 최대 20점)
+  // 2) 구매량 증가/감소: 간편식 구매 횟수를 지난주와 비교 (증가 1회당 4점, 최대 20점)
   const convenienceMealItems = allItems.filter((item) => item.category === 'convenience_meal');
   const convenienceMealCount = convenienceMealItems.length;
   const convenienceMealTotal = convenienceMealItems.reduce((sum, item) => sum + item.amount, 0);
   const countIncrease = Math.max(0, convenienceMealCount - previous.convenienceMealCount);
+  const quantityDecreaseCount = Math.max(0, previous.convenienceMealCount - convenienceMealCount);
   const quantityIncrease = clamp(countIncrease * 4, 0, 20);
   const quantityDetails =
     countIncrease > 0
       ? [`간편식 구매 ${previous.convenienceMealCount}회 → ${convenienceMealCount}회`]
       : [];
+  const quantityDecreaseDetails =
+    quantityDecreaseCount > 0
+      ? [`간편식 구매 ${previous.convenienceMealCount}회 → ${convenienceMealCount}회`]
+      : [];
 
-  // 3) 소비처 변화: 편의점·프랜차이즈 지출 비중을 지난주와 비교 (1%p당 1.5점, 최대 15점)
+  // 3) 소비처 변화: 편의점·프랜차이즈 지출 비중을 지난주와 비교 (증가 1%p당 1.5점, 최대 15점)
   const convenienceSpending = receipts
     .filter((receipt) => receipt.storeType === 'convenience_store' || receipt.storeType === 'franchise')
     .reduce((sum, receipt) => sum + receipt.totalAmount, 0);
   const currentConvenienceRatio = convenienceSpending / totalSpending;
   const ratioDiff = Math.max(0, currentConvenienceRatio - previous.convenienceRatio);
+  const ratioDecrease = Math.max(0, previous.convenienceRatio - currentConvenienceRatio);
   const storeShift = clamp(Math.round(ratioDiff * 100 * 1.5), 0, 15);
   const storeDetails =
     ratioDiff > 0
+      ? [
+          `편의점·프랜차이즈 지출 비중 ${Math.round(previous.convenienceRatio * 100)}% → ${Math.round(currentConvenienceRatio * 100)}%`,
+        ]
+      : [];
+  const storeDecreaseDetails =
+    ratioDecrease >= 0.01
       ? [
           `편의점·프랜차이즈 지출 비중 ${Math.round(previous.convenienceRatio * 100)}% → ${Math.round(currentConvenienceRatio * 100)}%`,
         ]
@@ -346,6 +372,12 @@ function computeFactors(
     convenienceMealTotal,
     currentConvenienceRatio,
     adjustableRatio,
+    priceDecreaseWon,
+    priceDecreaseDetails,
+    quantityDecreaseCount,
+    quantityDecreaseDetails,
+    storeDecreaseDetails,
+    previousConvenienceMealCount: previous.convenienceMealCount,
   };
 }
 
@@ -370,52 +402,73 @@ function temperatureLabel(temp: number): AnalysisResult['temperatureLabel'] {
 
 // ---------- 원인분해 ----------
 
-/** 4가지 원인 카드 데이터를 생성한다 */
+/** 4가지 원인 카드 데이터를 생성한다. 감소한 요인은 절약 관점으로 설명한다. */
 export function analyzeCauses(factors: TemperatureFactors): CauseDetail[] {
+  // 가격: 상승이 있으면 상승 우선, 없고 하락이 있으면 절약으로 설명
+  const priceSaved = factors.priceDetails.length === 0 && factors.priceDecreaseDetails.length > 0;
+  const quantitySaved =
+    factors.quantityDetails.length === 0 && factors.quantityDecreaseDetails.length > 0;
+  const storeSaved = factors.storeDetails.length === 0 && factors.storeDecreaseDetails.length > 0;
+
   return [
     {
       key: 'priceIncrease',
-      title: '가격 상승',
+      title: priceSaved ? '가격 변화 (절약)' : '가격 상승',
       points: factors.priceIncrease,
-      description:
-        factors.priceDetails.length > 0
-          ? '자주 사는 품목의 단가가 지난 기록보다 올랐어요.'
+      description: factors.priceDetails.length > 0
+        ? '자주 사는 품목의 단가가 지난 기록보다 올랐어요.'
+        : priceSaved
+          ? '행사·대체 구매로 단가가 내려간 품목이 있어요. 절약에 기여했어요.'
           : '이전 가격 기록과 비교했을 때 눈에 띄는 단가 상승은 없어요.',
       details:
         factors.priceDetails.length > 0
           ? factors.priceDetails
-          : factors.newBaselineItems.length > 0
-            ? [`${factors.newBaselineItems.slice(0, 3).join(', ')} 등은 이번 가격을 기준값으로 저장합니다.`]
-            : [],
+          : priceSaved
+            ? factors.priceDecreaseDetails
+            : factors.newBaselineItems.length > 0
+              ? [`${factors.newBaselineItems.slice(0, 3).join(', ')} 등은 이번 가격을 기준값으로 저장합니다.`]
+              : [],
     },
     {
       key: 'quantityIncrease',
-      title: '구매량 증가',
+      title: quantitySaved ? '구매량 변화 (절약)' : '구매량 증가',
       points: factors.quantityIncrease,
-      description:
-        factors.quantityDetails.length > 0
-          ? '같은 카테고리의 구매 횟수가 늘었어요.'
+      description: factors.quantityDetails.length > 0
+        ? '같은 카테고리의 구매 횟수가 늘었어요.'
+        : quantitySaved
+          ? '간편식 구매 횟수가 지난주보다 줄었어요. 절약에 크게 기여했어요.'
           : '구매 횟수는 지난주와 비슷한 수준이에요.',
-      details: factors.quantityDetails,
+      details: factors.quantityDetails.length > 0
+        ? factors.quantityDetails
+        : quantitySaved
+          ? factors.quantityDecreaseDetails
+          : [],
     },
     {
       key: 'storeShift',
-      title: '소비처 변화',
+      title: storeSaved ? '소비처 변화 (절약)' : '소비처 변화',
       points: factors.storeShift,
-      description:
-        factors.storeDetails.length > 0
-          ? '대형마트·전통시장보다 편의점·프랜차이즈 비중이 늘었어요.'
+      description: factors.storeDetails.length > 0
+        ? '대형마트·전통시장보다 편의점·프랜차이즈 비중이 늘었어요.'
+        : storeSaved
+          ? '편의점 비중이 줄고 마트·시장 장보기 중심으로 소비했어요.'
           : '소비처 구성은 지난주와 비슷해요.',
-      details: factors.storeDetails,
+      details: factors.storeDetails.length > 0
+        ? factors.storeDetails
+        : storeSaved
+          ? factors.storeDecreaseDetails
+          : [],
     },
     {
       key: 'adjustableSpending',
       title: '조정 가능한 소비',
       points: factors.adjustableSpending,
       description:
-        factors.adjustableDetails.length > 0
-          ? '간편식·간식·음료 등 조정 가능한 소비가 차지하는 비중이에요.'
-          : '조정 가능한 소비 비중이 낮은 편이에요.',
+        factors.adjustableRatio <= 0.08 && factors.adjustableDetails.length > 0
+          ? '간편식·간식·음료 비중이 낮게 잘 관리되고 있어요.'
+          : factors.adjustableDetails.length > 0
+            ? '간편식·간식·음료 등 조정 가능한 소비가 차지하는 비중이에요.'
+            : '조정 가능한 소비 비중이 낮은 편이에요.',
       details: factors.adjustableDetails,
     },
   ];
@@ -427,8 +480,27 @@ export function analyzeCauses(factors: TemperatureFactors): CauseDetail[] {
 export function generateActionPlans(
   receipts: Receipt[],
   factors: TemperatureFactors,
+  spendingDelta = 0,
 ): ActionPlan[] {
   const plans: ActionPlan[] = [];
+
+  // 절약한 주: 잘한 패턴을 유지하도록 제안한다
+  if (spendingDelta < 0) {
+    if (factors.quantityDecreaseCount > 0) {
+      plans.push({
+        text: `간편식 구매를 ${factors.previousConvenienceMealCount}회에서 ${factors.convenienceMealCount}회로 줄인 패턴, 다음 장보기에도 유지해보세요.`,
+        savingHint: `이번 주 약 ${formatWon(Math.abs(spendingDelta))} 절약`,
+      });
+    }
+    if (factors.priceDecreaseWon > 0) {
+      const savedItems = factors.priceDecreaseDetails
+        .map((detail) => detail.split(' ')[0])
+        .join('·');
+      plans.push({
+        text: `${savedItems}은(는) 행사·대체 구매로 단가를 낮췄어요. 다음 장보기에도 행사 주기를 확인해보세요.`,
+      });
+    }
+  }
 
   // 1) 간편식 대체 제안
   if (factors.convenienceMealCount >= 2) {
@@ -477,9 +549,13 @@ export function generateSummaryMessage(
   temperature: number,
   label: AnalysisResult['temperatureLabel'],
   mainReasons: string[],
+  spendingDelta = 0,
 ): string {
   if (mainReasons.length === 0) {
     return `이번 주 생활비 온도는 ${temperature}℃ (${label}) 이에요. 아직 분석할 소비 기록이 부족해요.`;
+  }
+  if (spendingDelta < 0) {
+    return `지난주보다 ${formatWon(Math.abs(spendingDelta))}을 아꼈어요. 가장 큰 절약 요인은 "${mainReasons[0]}"이에요.`;
   }
   return `이번 주 생활비 온도는 ${temperature}℃ (${label}) — 가장 큰 요인은 "${mainReasons[0]}"이에요.`;
 }
@@ -504,30 +580,12 @@ export function analyzeAll(
   const label = temperatureLabel(temperature);
   const causeDetails = analyzeCauses(factors);
 
-  // 기여 점수가 높은 순으로 주요 원인 3개를 뽑는다
-  const reasonCandidates: { points: number; text: string }[] = [
-    {
-      points: factors.adjustableSpending + factors.quantityIncrease,
-      text: '편의점 간편식·음료 소비 증가',
-    },
-    {
-      points: factors.priceIncrease,
-      text:
-        factors.priceDetails.length > 0
-          ? `${factors.priceDetails.map((detail) => detail.split(' ')[0]).join('·')} 단가 상승`
-          : '자주 사는 품목의 단가 상승',
-    },
-    { points: factors.storeShift, text: '소비처가 편의점 중심으로 이동' },
-    { points: factors.unmatchedRatio, text: '현금 등 직접 입력 소비 비중 증가' },
-  ];
-  const mainReasons = reasonCandidates
-    .filter((reason) => reason.points > 0)
-    .sort((a, b) => b.points - a.points)
-    .slice(0, 3)
-    .map((reason) => reason.text);
+  // 지난주 대비 지출 증감 (비교 기준이 없으면 0)
+  const totalSpending = receipts.reduce((sum, receipt) => sum + receipt.totalAmount, 0) || 1;
+  const previousTotal = previous.totalSpending ?? 0;
+  const spendingDelta = previousTotal > 0 ? totalSpending - previousTotal : 0;
 
   // 지역상생 소비 비중: 전통시장·동네가게 지출 / 전체 지출
-  const totalSpending = receipts.reduce((sum, receipt) => sum + receipt.totalAmount, 0) || 1;
   const localSpending = receipts
     .filter(
       (receipt) =>
@@ -536,7 +594,59 @@ export function analyzeAll(
     .reduce((sum, receipt) => sum + receipt.totalAmount, 0);
   const localSpendingRatio = localSpending / totalSpending;
 
-  const actionPlans = generateActionPlans(receipts, factors);
+  // 주요 원인 3개: 지출이 늘었으면 상승 요인, 줄었으면 절약 요인을 뽑는다
+  let mainReasons: string[];
+  if (spendingDelta < 0) {
+    const savingCandidates: { weight: number; text: string }[] = [
+      {
+        weight: factors.quantityDecreaseCount * 4,
+        text: `간편식 구매 ${factors.previousConvenienceMealCount}회 → ${factors.convenienceMealCount}회로 감소`,
+      },
+      {
+        weight: factors.storeDecreaseDetails.length > 0 ? 8 : 0,
+        text: '편의점 대신 마트·시장 장보기 중심으로 소비',
+      },
+      {
+        weight: Math.round(factors.priceDecreaseWon / 100),
+        text:
+          factors.priceDecreaseDetails.length > 0
+            ? `${factors.priceDecreaseDetails.map((detail) => detail.split(' ')[0]).join('·')} 행사가 구매로 단가 하락`
+            : '행사 상품 활용으로 단가 하락',
+      },
+      {
+        weight: localSpendingRatio >= 0.2 ? 5 : 0,
+        text: `전통시장·동네가게 소비 비중 ${Math.round(localSpendingRatio * 100)}% 유지`,
+      },
+    ];
+    mainReasons = savingCandidates
+      .filter((reason) => reason.weight > 0)
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 3)
+      .map((reason) => reason.text);
+  } else {
+    const reasonCandidates: { points: number; text: string }[] = [
+      {
+        points: factors.adjustableSpending + factors.quantityIncrease,
+        text: '편의점 간편식·음료 소비 증가',
+      },
+      {
+        points: factors.priceIncrease,
+        text:
+          factors.priceDetails.length > 0
+            ? `${factors.priceDetails.map((detail) => detail.split(' ')[0]).join('·')} 단가 상승`
+            : '자주 사는 품목의 단가 상승',
+      },
+      { points: factors.storeShift, text: '소비처가 편의점 중심으로 이동' },
+      { points: factors.unmatchedRatio, text: '현금 등 직접 입력 소비 비중 증가' },
+    ];
+    mainReasons = reasonCandidates
+      .filter((reason) => reason.points > 0)
+      .sort((a, b) => b.points - a.points)
+      .slice(0, 3)
+      .map((reason) => reason.text);
+  }
+
+  const actionPlans = generateActionPlans(receipts, factors, spendingDelta);
 
   const analysis: AnalysisResult = {
     temperature,
@@ -551,7 +661,8 @@ export function analyzeAll(
     causeDetails,
     localSpendingRatio,
     actionPlans,
-    summaryMessage: generateSummaryMessage(temperature, label, mainReasons),
+    summaryMessage: generateSummaryMessage(temperature, label, mainReasons, spendingDelta),
+    spendingDelta,
   };
 
   return { matchResults, analysis };

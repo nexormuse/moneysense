@@ -7,6 +7,7 @@ import type { CauseDetail } from '@/lib/types';
 
 type CauseBreakdownCardsProps = {
   causeDetails: CauseDetail[];
+  saving?: boolean; // 지난주보다 지출이 줄어든 주인지
 };
 
 const icons: Record<CauseDetail['key'], React.ReactNode> = {
@@ -23,12 +24,16 @@ const maxPoints: Record<CauseDetail['key'], number> = {
   adjustableSpending: 20,
 };
 
-export default function CauseBreakdownCards({ causeDetails }: CauseBreakdownCardsProps) {
+export default function CauseBreakdownCards({ causeDetails, saving }: CauseBreakdownCardsProps) {
   return (
     <div>
-      <h3 className="text-base font-semibold text-slate-900 mb-1">생활비 원인분해</h3>
+      <h3 className="text-base font-semibold text-slate-900 mb-1">
+        {saving ? '생활비 절약 분석' : '생활비 원인분해'}
+      </h3>
       <p className="text-sm text-slate-500 mb-3">
-        생활비 온도를 올린 요인을 4가지로 나눠 살펴봤어요.
+        {saving
+          ? '지난주보다 지출이 줄어든 이유를 4가지 관점으로 살펴봤어요.'
+          : '생활비 온도를 올린 요인을 4가지로 나눠 살펴봤어요.'}
       </p>
       <div className="grid grid-cols-1 gap-3">
         {causeDetails.map((cause) => {

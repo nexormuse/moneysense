@@ -109,6 +109,7 @@ export type AnalysisResult = {
   localSpendingRatio: number; // 지역상생 소비 비중 (0~1)
   actionPlans: ActionPlan[];
   summaryMessage: string;
+  spendingDelta: number; // 지난주 대비 지출 증감 (음수 = 절약). 비교 기준 없으면 0
 };
 
 // 이전 구매 기록 (가격/구매 패턴 비교 기준)

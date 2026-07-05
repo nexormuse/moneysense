@@ -115,13 +115,16 @@ export default function MatchResultPanel({
                 )}
                 <p className="mt-1.5 pl-6 text-xs text-slate-500">{match.message}</p>
 
-                {/* 펼치기 유도 */}
+                {/* 펼치기 유도: 오른쪽 정렬로 구분 */}
                 {!expanded && (
-                  <p className="mt-1.5 pl-6 text-[11px] font-semibold text-emerald-600">
-                    {receipt.items.length > 0
-                      ? `눌러서 구매 품목 ${receipt.items.length}건 보기`
-                      : '눌러서 영수증 정보 보기'}
-                  </p>
+                  <div className="mt-2 flex justify-end border-t border-slate-200/70 pt-1.5">
+                    <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-emerald-600">
+                      {receipt.items.length > 0
+                        ? `구매 품목 ${receipt.items.length}건 보기`
+                        : '영수증 정보 보기'}
+                      <ChevronDown size={12} />
+                    </span>
+                  </div>
                 )}
               </button>
 

@@ -15,7 +15,7 @@ import {
   Thermometer,
   Trash2,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ActionPlanPanel from './ActionPlanPanel';
 import BaselineCard from './BaselineCard';
 import CauseBreakdownCards from './CauseBreakdownCards';
@@ -26,11 +26,19 @@ import ReceiptInputPanel from './ReceiptInputPanel';
 import TemperatureCard from './TemperatureCard';
 import TransactionPanel from './TransactionPanel';
 import { Badge, Button, Card, EmptyState } from './ui';
-import { previousData, sampleReceipts, sampleTransactions } from '@/lib/mockData';
+import {
+  previousData,
+  previousDataSaving,
+  sampleReceipts,
+  sampleReceiptsSaving,
+  sampleTransactions,
+  sampleTransactionsSaving,
+} from '@/lib/mockData';
 import { analyzeAll, buildBaseline } from '@/lib/services/mockAi';
 import type { AppState, MatchOverride, Receipt, Transaction, UserBaseline } from '@/lib/types';
 
-const STORAGE_KEY = 'moneysense-state-v1';
+// v2: 상호명 개편(iM마트 등) 이전에 저장된 옛 데이터를 무시하기 위해 키를 올림
+const STORAGE_KEY = 'moneysense-state-v2';
 
 export type Tab = 'home' | 'input' | 'result';
 export type InputTab = 'receipt' | 'manual' | 'transactions';
@@ -72,6 +80,10 @@ export default function MoneySenseApp({ onScreenChange }: MoneySenseAppProps) {
   const [toast, setToast] = useState('');
   // 직접 입력 저장 완료 모달에 보여줄 영수증
   const [savedReceipt, setSavedReceipt] = useState<Receipt | null>(null);
+  // 분석 결과 페이지의 현재 단계 (1 매칭 → 2 온도 → 3 원인 → 4 플랜)
+  const [resultStep, setResultStep] = useState(1);
+  // 화면/단계 전환 시 스크롤을 맨 위로 되돌리기 위한 앵커
+  const topRef = useRef<HTMLDivElement>(null);
 
   // 첫 로딩 시 localStorage에서 상태 복원
   useEffect(() => {
@@ -118,18 +130,34 @@ export default function MoneySenseApp({ onScreenChange }: MoneySenseAppProps) {
     onScreenChange?.({ tab, inputTab, hasData });
   }, [tab, inputTab, hasData, onScreenChange]);
 
+  // 탭이나 분석 단계가 바뀌면 스크롤을 맨 위로
+  useEffect(() => {
+    topRef.current?.scrollIntoView({ block: 'start' });
+  }, [tab, resultStep]);
+
   // 홈 화면 소비 비교: 지난 소비(비교 기준) vs 이번 소비(현재 영수증 합계)
   const currentTotal = receipts.reduce((sum, receipt) => sum + receipt.totalAmount, 0);
   const previousTotal = (baseline ?? previousData).totalSpending ?? 0;
 
   // 샘플 데모 데이터 로딩 (데모 수치가 항상 같게 나오도록 판정·기준도 초기화)
-  const loadDemo = () => {
-    setReceipts(sampleReceipts);
-    setTransactions(sampleTransactions);
+  // 'increase': 지출이 늘어난 주, 'saving': 지출을 아낀 주
+  const loadDemo = (kind: 'increase' | 'saving' = 'increase') => {
+    if (kind === 'saving') {
+      setReceipts(sampleReceiptsSaving);
+      setTransactions(sampleTransactionsSaving);
+      // 절약 데모는 "지난주 마감 기록"과 비교하는 시나리오
+      setBaseline({ ...previousDataSaving, savedAt: '2026-07-07' });
+    } else {
+      setReceipts(sampleReceipts);
+      setTransactions(sampleTransactions);
+      setBaseline(null);
+    }
     setMatchOverrides([]);
-    setBaseline(null);
+    setResultStep(1);
     setTab('result');
-    setToast('샘플 데모 데이터를 불러왔어요.');
+    setToast(
+      kind === 'saving' ? '지출 절약 데모를 불러왔어요.' : '지출 증가 데모를 불러왔어요.',
+    );
   };
 
   const resetAll = () => {
@@ -229,9 +257,31 @@ export default function MoneySenseApp({ onScreenChange }: MoneySenseAppProps) {
     { key: 'transactions', label: '카드·계좌 거래내역' },
   ];
 
+  // 분석 결과 단계 정의
+  const resultSteps = [
+    { step: 1, short: '매칭', title: '영수증과 거래내역을 연결했어요' },
+    { step: 2, short: '온도', title: '생활비 온도로 진단했어요' },
+    {
+      step: 3,
+      short: '원인',
+      title: analysis.spendingDelta < 0 ? '어떻게 아꼈을까요?' : '왜 올랐을까요?',
+    },
+    { step: 4, short: '플랜', title: '다음 장보기는 이렇게' },
+  ];
+
+  // 요약 히어로 배경색: 온도 상태에 따라
+  const resultGradient = {
+    안정: 'from-emerald-500 to-teal-600',
+    관심: 'from-blue-500 to-indigo-600',
+    주의: 'from-orange-500 to-amber-600',
+    뜨거움: 'from-red-500 to-rose-600',
+  }[analysis.temperatureLabel];
+
   return (
     // 모바일 앱 셸: 상단 헤더 + 콘텐츠 + 하단 탭바 (데스크톱에서는 휴대폰 프레임 안에 들어간다)
     <div className="flex min-h-screen flex-col lg:min-h-full">
+      {/* 스크롤 복귀용 앵커 */}
+      <div ref={topRef} />
       {/* 헤더 (AppShell) */}
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="flex items-center justify-between px-4 py-3">
@@ -325,17 +375,11 @@ export default function MoneySenseApp({ onScreenChange }: MoneySenseAppProps) {
                   aria-label="원인분해 자세히 보기"
                 >
                   <Card className="!p-4 transition-all group-hover:border-emerald-400 group-hover:shadow-md group-active:scale-[0.99]">
-                    <div className="mb-2 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <ListChecks size={16} className="text-blue-500" />
-                        <span className="text-sm font-semibold text-slate-800">
-                          왜 올랐을까요?
-                        </span>
-                      </div>
-                      <ChevronRight
-                        size={16}
-                        className="text-slate-300 transition-colors group-hover:text-emerald-500"
-                      />
+                    <div className="mb-2 flex items-center gap-2">
+                      <ListChecks size={16} className="text-blue-500" />
+                      <span className="text-sm font-semibold text-slate-800">
+                        {analysis.spendingDelta < 0 ? '어떻게 아꼈을까요?' : '왜 올랐을까요?'}
+                      </span>
                     </div>
                     <ol className="space-y-1.5">
                       {analysis.mainReasons.map((reason, index) => (
@@ -347,9 +391,13 @@ export default function MoneySenseApp({ onScreenChange }: MoneySenseAppProps) {
                         </li>
                       ))}
                     </ol>
-                    <p className="mt-3 text-xs font-semibold text-emerald-600">
-                      원인분해 자세히 보기 →
-                    </p>
+                    {/* 이동 유도: 오른쪽 정렬로 구분 */}
+                    <div className="mt-3 flex justify-end border-t border-slate-100 pt-2.5">
+                      <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-600 group-hover:text-emerald-700">
+                        원인분해 자세히 보기
+                        <ChevronRight size={13} />
+                      </span>
+                    </div>
                   </Card>
                 </button>
               )}
@@ -363,17 +411,11 @@ export default function MoneySenseApp({ onScreenChange }: MoneySenseAppProps) {
                   aria-label="다음 장보기 플랜 자세히 보기"
                 >
                   <Card className="!p-4 transition-all group-hover:border-emerald-400 group-hover:shadow-md group-active:scale-[0.99]">
-                    <div className="mb-2 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <ReceiptIcon size={16} className="text-emerald-600" />
-                        <span className="text-sm font-semibold text-slate-800">
-                          다음 장보기 플랜
-                        </span>
-                      </div>
-                      <ChevronRight
-                        size={16}
-                        className="text-slate-300 transition-colors group-hover:text-emerald-500"
-                      />
+                    <div className="mb-2 flex items-center gap-2">
+                      <ReceiptIcon size={16} className="text-emerald-600" />
+                      <span className="text-sm font-semibold text-slate-800">
+                        다음 장보기 플랜
+                      </span>
                     </div>
                     <ul className="space-y-2">
                       {analysis.actionPlans.slice(0, 2).map((plan, index) => (
@@ -392,9 +434,13 @@ export default function MoneySenseApp({ onScreenChange }: MoneySenseAppProps) {
                         </li>
                       ))}
                     </ul>
-                    <p className="mt-3 text-xs font-semibold text-emerald-600">
-                      전체 플랜 {analysis.actionPlans.length}개 보기 →
-                    </p>
+                    {/* 이동 유도: 오른쪽 정렬로 구분 */}
+                    <div className="mt-3 flex justify-end border-t border-slate-100 pt-2.5">
+                      <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-600 group-hover:text-emerald-700">
+                        전체 플랜 {analysis.actionPlans.length}개 보기
+                        <ChevronRight size={13} />
+                      </span>
+                    </div>
                   </Card>
                 </button>
               )}
@@ -427,21 +473,30 @@ export default function MoneySenseApp({ onScreenChange }: MoneySenseAppProps) {
                   영수증과 거래내역을 연결해 <b>생활비 온도</b>를 알려드려요. 무엇을 샀고, 왜
                   올랐고, 다음에는 어떻게 바꾸면 좋을지까지.
                 </p>
-                <div className="mt-6 grid grid-cols-1 gap-2">
-                  <button
-                    type="button"
-                    onClick={loadDemo}
-                    className="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors shadow-sm"
-                  >
-                    샘플 데모 보기
-                  </button>
+                <div className="mt-6 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => loadDemo('increase')}
+                      className="rounded-xl bg-white px-3 py-3 text-sm font-semibold text-orange-600 hover:bg-orange-50 transition-colors shadow-sm"
+                    >
+                      지출 증가 데모
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => loadDemo('saving')}
+                      className="rounded-xl bg-white px-3 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors shadow-sm"
+                    >
+                      지출 절약 데모
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
                       setTab('input');
                       setInputTab('receipt');
                     }}
-                    className="rounded-xl border border-white/40 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
+                    className="w-full rounded-xl border border-white/40 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
                   >
                     영수증 추가하기
                   </button>
@@ -560,42 +615,116 @@ export default function MoneySenseApp({ onScreenChange }: MoneySenseAppProps) {
               />
             </Card>
           ) : (
-            <div className="space-y-5">
-              {/* 한 줄 요약 */}
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-800 leading-relaxed">
-                {analysis.summaryMessage}
+            <div className="space-y-4">
+              {/* 요약 히어로: 온도 · 상태 · 지난주 대비 증감을 한 영역에서 구분해 보여준다 */}
+              <section
+                className={`rounded-3xl bg-gradient-to-br ${resultGradient} p-5 text-white shadow-lg`}
+              >
+                <div className="grid grid-cols-3 divide-x divide-white/25 text-center">
+                  <div className="px-1">
+                    <p className="text-[11px] font-medium text-white/75">생활비 온도</p>
+                    <p className="mt-1 text-3xl font-bold tracking-tight">
+                      {analysis.temperature}
+                      <span className="text-lg">℃</span>
+                    </p>
+                  </div>
+                  <div className="px-1">
+                    <p className="text-[11px] font-medium text-white/75">상태</p>
+                    <p className="mt-1 text-3xl font-bold tracking-tight">
+                      {analysis.temperatureLabel}
+                    </p>
+                  </div>
+                  <div className="px-1">
+                    <p className="text-[11px] font-medium text-white/75">지난주 대비</p>
+                    {previousTotal > 0 ? (
+                      <>
+                        <p className="mt-1.5 text-xl font-bold tracking-tight">
+                          {analysis.spendingDelta >= 0 ? '+' : '-'}
+                          {Math.abs(analysis.spendingDelta).toLocaleString('ko-KR')}원
+                        </p>
+                        <p className="text-[11px] font-semibold text-white/85">
+                          {analysis.spendingDelta >= 0 ? '소비 증가' : '소비 절약'}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="mt-2 text-lg font-bold">기록 없음</p>
+                    )}
+                  </div>
+                </div>
+                <p className="mt-4 border-t border-white/25 pt-3 text-xs leading-relaxed text-white/90">
+                  {analysis.summaryMessage}
+                </p>
+              </section>
+
+              {/* 단계 선택: 클릭하면 해당 단계로 이동 */}
+              <div className="grid grid-cols-4 gap-1.5">
+                {resultSteps.map((item) => (
+                  <button
+                    key={item.step}
+                    type="button"
+                    onClick={() => setResultStep(item.step)}
+                    className={`rounded-xl px-1 py-2 text-xs font-semibold transition-all ${
+                      resultStep === item.step
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25'
+                        : 'border border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="block text-[10px] opacity-70">STEP {item.step}</span>
+                    {item.short}
+                  </button>
+                ))}
               </div>
 
-              {/* 심사/데모 스토리 순서: 연결 → 진단 → 원인 → 플랜 */}
+              {/* 현재 단계 콘텐츠 */}
               <div>
-                <StepLabel step={1} text="영수증과 거래내역을 연결했어요" />
-                <MatchResultPanel
-                  receipts={receipts}
-                  transactions={transactions}
-                  matchResults={matchResults}
-                  onConfirmMatch={confirmMatch}
-                  onRejectMatch={rejectMatch}
-                  onResetOverride={resetOverride}
-                />
+                <StepLabel step={resultStep} text={resultSteps[resultStep - 1].title} />
+                {resultStep === 1 && (
+                  <MatchResultPanel
+                    receipts={receipts}
+                    transactions={transactions}
+                    matchResults={matchResults}
+                    onConfirmMatch={confirmMatch}
+                    onRejectMatch={rejectMatch}
+                    onResetOverride={resetOverride}
+                  />
+                )}
+                {resultStep === 2 && <TemperatureCard analysis={analysis} />}
+                {resultStep === 3 && (
+                  <CauseBreakdownCards
+                    causeDetails={analysis.causeDetails}
+                    saving={analysis.spendingDelta < 0}
+                  />
+                )}
+                {resultStep === 4 && (
+                  <div className="space-y-4">
+                    <ActionPlanPanel analysis={analysis} />
+                    <BaselineCard
+                      baseline={baseline}
+                      onSaveBaseline={saveBaseline}
+                      onCloseWeek={closeWeek}
+                      onResetBaseline={resetBaseline}
+                    />
+                  </div>
+                )}
               </div>
-              <div>
-                <StepLabel step={2} text="이번 주 생활비 상태를 온도로 진단했어요" />
-                <TemperatureCard analysis={analysis} />
+
+              {/* 단계 이동 버튼 */}
+              <div className="flex gap-2">
+                {resultStep > 1 && (
+                  <Button variant="secondary" onClick={() => setResultStep(resultStep - 1)}>
+                    ← 이전
+                  </Button>
+                )}
+                {resultStep < 4 ? (
+                  <Button className="flex-1" onClick={() => setResultStep(resultStep + 1)}>
+                    다음 단계: {resultSteps[resultStep].short} →
+                  </Button>
+                ) : (
+                  <Button className="flex-1" variant="secondary" onClick={() => setTab('home')}>
+                    홈으로 돌아가기
+                  </Button>
+                )}
               </div>
-              <div>
-                <StepLabel step={3} text="왜 올랐을까요?" />
-                <CauseBreakdownCards causeDetails={analysis.causeDetails} />
-              </div>
-              <div>
-                <StepLabel step={4} text="그래서, 다음 장보기는 이렇게" />
-                <ActionPlanPanel analysis={analysis} />
-              </div>
-              <BaselineCard
-                baseline={baseline}
-                onSaveBaseline={saveBaseline}
-                onCloseWeek={closeWeek}
-                onResetBaseline={resetBaseline}
-              />
 
               <p className="text-center text-[11px] text-slate-400 pb-4">
                 머니센스의 분석과 제안은 입력된 기록을 바탕으로 한 참고 정보예요.

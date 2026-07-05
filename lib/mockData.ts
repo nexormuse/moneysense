@@ -80,6 +80,90 @@ export const previousData: PreviousData = {
   totalSpending: 64500,    // 지난주 총 지출 (이번 주 76,800원과 비교)
 };
 
+// ---------- 절약 시나리오 샘플 (지난주보다 지출이 줄어든 주) ----------
+
+// 절약 데모의 비교 기준: 지출이 늘었던 지난주 기록
+export const previousDataSaving: PreviousData = {
+  prices: {
+    우유: 3200,
+    계란: 7800,
+    컵라면: 1800,
+  },
+  convenienceMealCount: 3, // 지난주 간편식 3회
+  convenienceRatio: 0.18,  // 지난주 편의점 식비 비중 18%
+  totalSpending: 76800,    // 지난주 총 지출 (이번 주 48,800원과 비교)
+};
+
+export const sampleTransactionsSaving: Transaction[] = [
+  {
+    id: 'stx-1',
+    date: '2026-07-08',
+    merchantName: 'iM마트',
+    amount: 28500,
+    paymentMethod: 'card',
+  },
+  {
+    id: 'stx-2',
+    date: '2026-07-10',
+    merchantName: '샛별시장',
+    amount: 16000,
+    paymentMethod: 'card',
+  },
+  {
+    id: 'stx-3',
+    date: '2026-07-11',
+    merchantName: '미소24',
+    amount: 4300,
+    paymentMethod: 'card',
+  },
+];
+
+// 간편식을 줄이고 행사 상품·시장 장보기 중심으로 소비한 주
+export const sampleReceiptsSaving: Receipt[] = [
+  {
+    id: 'src-1',
+    type: 'itemized',
+    date: '2026-07-08',
+    storeName: 'iM마트',
+    storeType: 'large_mart',
+    totalAmount: 28500,
+    paymentMethod: 'card',
+    items: [
+      { id: 'src-1-i1', name: '우유', amount: 3000, category: 'essential', source: 'OCR' }, // 행사가
+      { id: 'src-1-i2', name: '계란', amount: 7500, category: 'essential', source: 'OCR' }, // 행사가
+      { id: 'src-1-i3', name: '두부', amount: 2000, category: 'essential', source: 'OCR' },
+      { id: 'src-1-i4', name: '채소', amount: 6000, category: 'fresh_food', source: 'OCR' },
+      { id: 'src-1-i5', name: '기타', amount: 10000, category: 'other', source: 'OCR' },
+    ],
+  },
+  {
+    id: 'src-2',
+    type: 'itemized',
+    date: '2026-07-10',
+    storeName: '샛별시장',
+    storeType: 'traditional_market',
+    totalAmount: 16000,
+    paymentMethod: 'card',
+    items: [
+      { id: 'src-2-i1', name: '채소', amount: 7000, category: 'fresh_food', source: 'OCR' },
+      { id: 'src-2-i2', name: '과일', amount: 9000, category: 'fresh_food', source: 'OCR' },
+    ],
+  },
+  {
+    id: 'src-3',
+    type: 'itemized',
+    date: '2026-07-11',
+    storeName: '미소24',
+    storeType: 'convenience_store',
+    totalAmount: 4300,
+    paymentMethod: 'card',
+    items: [
+      { id: 'src-3-i1', name: '컵라면', amount: 1800, category: 'convenience_meal', source: 'OCR' },
+      { id: 'src-3-i2', name: '생수', amount: 2500, category: 'essential', source: 'OCR' },
+    ],
+  },
+];
+
 // "영수증 추가" 화면에서 고를 수 있는 샘플 영수증 (mock OCR 결과)
 export const ocrSampleReceipts: { label: string; description: string; receipt: Omit<Receipt, 'id'> }[] = [
   {

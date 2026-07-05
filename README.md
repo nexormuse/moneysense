@@ -38,7 +38,8 @@ https://moneysense-tau.vercel.app/
 ## 주요 기능
 
 ### 입력
-- **영수증 추가**: 샘플 영수증 3종(품목형 / 합계형 / 카드매출전표형) 선택 또는 이미지 업로드(mock OCR 안내 후 샘플 결과 사용)
+- **영수증 추가**: 샘플 영수증 3종(품목형 / 합계형 / 카드매출전표형) 선택 또는 영수증 사진 업로드
+- **영수증 사진 AI 인식**: 업로드하면 LLM Vision이 날짜·상호·품목·금액을 인식하고 카테고리까지 분류. 저장 전 확인/수정 화면 제공, 인식 실패·영수증 아님·키 미설정 시 정직한 안내와 함께 직접 입력 유도. 업로드된 이미지는 저장하지 않으며 인식 처리 후 즉시 폐기
 - **직접 지출 입력**: 날짜·상호·소비처 유형·결제수단·품목·메모 입력, 저장 시 확인 모달
 - **직접 입력 품목 AI 분류**: 품목 추가 시 LLM 분류를 시도하고(키 없음·오류·타임아웃 시 룰 기반 폴백), 분류 출처를 "AI 분류"/"룰 기반" 배지로 표시
 - **빠른 금액 버튼**: +1천원 ~ +10만원 버튼 누적 입력 + 초기화 (품목 금액 입력에도 재사용)
@@ -77,14 +78,14 @@ flowchart TD
 
 | Agent | 역할 | 현재 구현 (`lib/services/mockAi.ts`) |
 | --- | --- | --- |
-| OCR·입력 보완 | 영수증에서 품목·금액 추출, 흐릿하면 직접 입력 유도 | `mockParseReceipt` (mock OCR) |
+| OCR·입력 보완 | 영수증에서 품목·금액 추출, 흐릿하면 직접 입력 유도 | `parseReceiptImageWithVision` — 업로드 사진은 LLM Vision 인식(`ANTHROPIC_API_KEY` 설정 시), 실패 시 직접 입력 유도. 샘플 영수증은 `mockParseReceipt` |
 | 거래내역 매칭 | 금액·날짜·상호·결제수단 점수제로 영수증과 거래 연결 | `matchReceiptsToTransactions`, `applyMatchOverrides` |
 | 품목 분류 | 품목을 필수식료품/간편식/간식·음료 등으로 분류 | `classifyItemWithLLM` — 직접 입력 품목은 LLM 분류(`ANTHROPIC_API_KEY` 설정 시), 키 없음·오류·3초 타임아웃 시 `classifyItem`(룰 기반) 폴백 |
 | 생활비 온도 | 가산 요인을 합산해 0~100℃ 온도 계산 | `calculateTemperature`, `buildTemperatureBreakdown` |
 | 원인분해 | 상승(또는 절약) 원인을 4가지로 분해하고 지난 소비와 비교 | `analyzeCauses`, `buildComparisons` |
 | 장보기 플랜 | 절약 + 지역상생 전환 제안, 발표용 요약 생성 | `generateActionPlans`, `generatePresentationSummary` |
 
-> 현재 MVP는 실제 OCR/LLM/금융 API 대신 **mock adapter와 계산 로직**으로 Agentic workflow를 검증했습니다. 각 함수의 시그니처를 유지한 채 내부만 교체하면 실제 API로 확장할 수 있습니다. (자세한 내용: [docs/architecture.md](docs/architecture.md))
+> 현재 MVP는 **mock adapter와 계산 로직으로 Agentic workflow의 골격을 검증**한 뒤, 영수증 Vision OCR과 직접 입력 품목 분류를 실제 LLM 호출로 교체했습니다(폴백: 샘플/룰 기반). 나머지 Agent도 함수 시그니처를 유지한 채 내부만 교체하면 확장됩니다. (자세한 내용: [docs/architecture.md](docs/architecture.md))
 >
 > 룰 기반이 실제 품목명·가맹점명 앞에서 어디서 무너지고, 각 Agent를 어떤 프롬프트로 교체할지는 [docs/prompt-blueprint.md](docs/prompt-blueprint.md)에 설계했습니다. 원칙은 **"숫자는 코드가, 언어는 LLM이"** — 온도·매칭 점수 같은 수치는 결정적 코드가 계산하고, LLM은 분류·문장·문맥만 담당해 환각을 구조적으로 차단합니다.
 
@@ -124,7 +125,7 @@ flowchart LR
 
 포용 관점에서는, 설명 가능한 소비 분석(온도 + 원인 카드)이 금융 이해력 격차를 줄이는 장치입니다. 복잡한 차트 대신 "계란이 700원 올랐어요"처럼 **품목과 원인으로 말하는 리포트**라서, 금융 데이터 해석에 익숙하지 않은 사용자도 바로 이해할 수 있습니다.
 
-> 규제 준수: 금융 데이터 연동은 마이데이터 표준 API 기반(스크래핑 미사용)으로 설계하며, 전송요구권에 따른 사용자의 명시적 동의 흐름을 전제합니다.
+> 규제 준수: 금융 데이터 연동은 마이데이터 표준 API 기반(스크래핑 미사용)으로 설계하며, 전송요구권에 따른 사용자의 명시적 동의 흐름을 전제합니다. 업로드된 영수증 이미지는 저장하지 않으며 인식 처리 후 즉시 폐기됩니다.
 
 ---
 
@@ -148,7 +149,8 @@ flowchart LR
 - **Tailwind CSS 4**
 - **lucide-react** (아이콘)
 - **localStorage** (DB 없이 상태 저장)
-- **mock AI adapter** (`lib/services/mockAi.ts` — 실제 OCR/LLM/금융 API로 교체 가능한 구조)
+- **LLM Vision OCR + 품목 분류** (Anthropic API — 영수증 사진 인식과 카테고리 분류, 폴백: 룰 기반)
+- **mock AI adapter** (`lib/services/mockAi.ts` — 나머지 분석 로직도 실제 API로 교체 가능한 구조)
 - **Vercel** (배포)
 
 ## 프로젝트 구조
@@ -179,7 +181,7 @@ npm run build   # 프로덕션 빌드
 npm run lint    # ESLint 검사
 ```
 
-LLM 품목 분류를 켜려면 `.env.example`을 `.env.local`로 복사하고 `ANTHROPIC_API_KEY`를 넣으세요. **키가 없어도 모든 기능이 룰 기반 분류로 동작합니다** (데모는 네트워크 없이도 재현됩니다).
+영수증 사진 AI 인식과 LLM 품목 분류를 켜려면 `.env.example`을 `.env.local`로 복사하고 `ANTHROPIC_API_KEY`를 넣으세요. **키가 없어도 앱은 죽지 않습니다** — 사진 인식은 정직한 안내와 함께 샘플/직접 입력으로 유도하고, 품목 분류는 룰 기반으로 폴백합니다 (샘플 데모는 네트워크 없이도 재현됩니다).
 
 ---
 
@@ -187,7 +189,7 @@ LLM 품목 분류를 켜려면 `.env.example`을 `.env.local`로 복사하고 `A
 
 | 영역 | 현재 MVP | 실제 서비스 확장 |
 | --- | --- | --- |
-| 영수증 인식 | mock OCR / 샘플 영수증 | OCR API |
+| 영수증 인식 | LLM Vision OCR (폴백: 직접 입력) | 전자영수증 제휴 연동으로 무입력 자동화 |
 | 카드·계좌 내역 | 샘플 거래내역 | 금융 API / 마이데이터 연동 |
 | 품목 분류 | 룰 기반 + 직접 입력 품목 LLM 분류(폴백: 룰 기반) | LLM 분류 Agent 전면 적용 |
 | 원인분해 | 계산 로직 기반 | 개인화 분석 Agent |

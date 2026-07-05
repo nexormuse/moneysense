@@ -1,6 +1,6 @@
 # LLM 프롬프트 설계도 (Prompt Blueprint)
 
-현재 MVP는 룰 기반 + 결정적 계산 로직으로 Agentic workflow를 검증했다. 이 문서는 **왜 룰 기반만으로는 부족하고 LLM Agent가 필요한지**를 실패 사례로 보이고, 각 Agent를 실제 LLM으로 교체할 때 사용할 프롬프트 구조를 설계한 것이다.
+현재 MVP는 룰 기반 + 결정적 계산 로직으로 Agentic workflow를 검증했다. 이 문서는 **왜 룰 기반만으로는 부족하고 LLM Agent가 필요한지**를 실패 사례로 보이고, 각 Agent를 실제 LLM으로 교체할 때 사용할 프롬프트 구조를 설계한 것이다. 이 중 **영수증 OCR(0번)과 품목 분류(1번)는 설계대로 실제 LLM 호출로 구현되어 동작 중**이며, 나머지는 같은 방식으로 교체할 로드맵이다.
 
 ## 핵심 원칙 — "숫자는 코드가, 언어는 LLM이"
 
@@ -13,9 +13,60 @@ LLM 출력은 항상 JSON 스키마 검증을 거치고, 검증 실패 시 룰 �
 
 ---
 
-## 1. 품목 분류 Agent — `classifyItem`
+## 0. 영수증 OCR Agent — `parseReceiptImageWithVision` ✅ 구현됨
 
-### 룰 기반의 실패 사례 (현재 MVP 한계)
+영수증 사진 업로드에 실제로 동작 중인 프롬프트다 (`app/api/ocr/route.ts`). OCR과 품목 카테고리 분류를 **한 번의 Vision 호출로 함께 수행**해 비용·지연을 절반으로 줄이고, "AI 분류" 배지가 OCR 품목에도 그대로 적용된다.
+
+**system prompt (실사용 중)**
+
+```text
+너는 한국 영수증 판독기다. 영수증 이미지에서 정보를 추출해 JSON 하나로만 출력한다. 설명 문장 금지.
+
+추출 항목:
+- date: 결제 날짜 (YYYY-MM-DD). 읽을 수 없으면 null
+- storeName: 상호명 (지점명 포함)
+- storeType: large_mart(대형마트) | convenience_store(편의점) | traditional_market(전통시장)
+  | local_store(동네가게) | franchise(프랜차이즈) | online(온라인몰) | other(기타) 중 추정
+- paymentMethod: "card"(카드) | "cash"(현금) | "unknown"(불명)
+- totalAmount: 총 결제 금액 (숫자)
+- items: 품목 배열 [{ "name": string, "amount": number, "category": string }]
+- receiptType: 품목이 식별되면 "itemized", 총액만 보이면 "total_only" (이때 items는 빈 배열)
+
+category는 아래 8개 외 값 금지:
+essential(필수 식료품) | fresh_food(신선식품) | convenience_meal(간편식)
+| snack_drink(간식·음료) | daily_goods(생활용품) | adjustable(조정 가능한 소비)
+| local_friendly(지역상생 소비) | other(기타)
+분류 예시: "처음처럼페트360" → adjustable(주류), "곰곰 우유 900ml×2 기획" → essential, "우유식빵" → snack_drink
+
+규칙:
+- 영수증이 아닌 이미지(풍경, 문서, 화면 캡처 등)면 { "error": "not_a_receipt" }만 출력한다.
+- 이미지에 보이지 않는 품목·금액을 만들어내지 않는다. 읽을 수 없으면 빼거나 null로 둔다.
+- 할인·포인트 차감이 있으면 실제 결제 금액을 totalAmount로 한다.
+
+출력 JSON 스키마:
+{ "date": string|null, "storeName": string, "storeType": string, "paymentMethod": string,
+  "totalAmount": number, "items": [{ "name": string, "amount": number, "category": string }],
+  "receiptType": "itemized" | "total_only" }
+```
+
+**서버 측 검증 규칙 (스키마 방어)**
+
+| 항목 | 검증 | 실패 시 처리 |
+| --- | --- | --- |
+| 품목 category | 8개 enum 검증 | 해당 품목만 룰 기반 `classifyItem`으로 개별 폴백 (배지 "룰 기반") |
+| 품목 합계 vs 총액 | 오차 ±10% 이내 | 초과 시 품목 유지 + `sumMismatch: true` → UI가 "금액을 확인해주세요" 표시 |
+| date | `YYYY-MM-DD` 형식·유효성 | 오늘 날짜로 대체 + `dateUncertain: true` → UI가 확인 유도 |
+| storeType / paymentMethod | enum 검증 | `other`로 정규화 |
+| 영수증 아님 | `{ "error": "not_a_receipt" }` | 422 응답 → UI가 "영수증 사진이 아닌 것 같아요" 안내 |
+| total_only | items 빈 배열 | 합계형 영수증으로 저장 → 기존 "품목 직접 추가" 흐름 연결 |
+
+정규화된 결과는 기존 `Omit<Receipt, 'id'>` 타입으로 반환되어 매칭→분류→온도 파이프라인이 무수정으로 이어진다. 개인정보 보호를 위해 이미지는 저장·로깅 없이 호출 후 즉시 폐기한다.
+
+---
+
+## 1. 품목 분류 Agent — `classifyItemWithLLM` ✅ 구현됨
+
+### 룰 기반의 실패 사례
 
 현재 구현은 키워드 포함 여부(`CATEGORY_RULES`)로 분류한다. 실제 영수증의 품목명 앞에서는 다음과 같이 무너진다.
 

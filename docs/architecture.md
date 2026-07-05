@@ -2,7 +2,7 @@
 
 ## 설계 원칙
 
-현재 MVP는 실제 OCR/LLM/금융 API를 바로 붙이는 대신, **Agentic workflow를 검증하기 위해 mock adapter와 계산 로직으로 구현**했다. 실제 서비스에서는 OCR API, 금융 API, LLM Agent를 각 adapter 내부에 연결해 확장할 수 있다.
+현재 MVP는 **Agentic workflow의 골격을 mock adapter와 계산 로직으로 먼저 검증**한 뒤, 검증된 교체 지점에 실제 LLM을 단계적으로 연결하고 있다. 영수증 Vision OCR과 직접 입력 품목 분류는 실제 LLM 호출로 동작하며(폴백: 샘플/룰 기반), 금융 API 등 나머지는 같은 방식으로 각 adapter 내부에 연결해 확장한다.
 
 이를 위해 모든 분석 로직을 `lib/services/mockAi.ts` 한 곳에 모으고, **함수 시그니처(입력/출력 타입)를 유지한 채 내부 구현만 교체**하면 되는 구조로 분리했다. UI 컴포넌트는 `analyzeAll()` 파이프라인의 결과 타입(`AnalysisResult`, `MatchResult`)만 의존하므로, 내부가 mock이든 실제 API든 화면 코드는 바뀌지 않는다.
 
@@ -11,15 +11,15 @@
 ```mermaid
 flowchart TD
   subgraph 입력
-    A1[영수증 이미지<br/>mock OCR] --> B
+    A1[영수증 사진 업로드<br/>LLM Vision OCR] --> B
     A2[샘플 영수증 선택] --> B
     A3[직접 입력 폼] --> B
     A4[카드·계좌 거래내역<br/>샘플 + 직접 추가] --> C
   end
 
-  B["OCR·입력 보완 Agent<br/>mockParseReceipt()"] --> C
+  B["OCR·입력 보완 Agent<br/>parseReceiptImageWithVision()<br/>mockParseReceipt() (샘플)"] --> C
   C["거래내역 매칭 Agent<br/>matchReceiptsToTransactions()<br/>applyMatchOverrides()"] --> D
-  D["품목 분류 Agent<br/>classifyItem()"] --> E
+  D["품목 분류 Agent<br/>classifyItemWithLLM()<br/>classifyItem() (폴백)"] --> E
   E["생활비 온도 Agent<br/>computeFactors()<br/>calculateTemperature()<br/>buildTemperatureBreakdown()"] --> F
   F["원인분해 Agent<br/>analyzeCauses()<br/>buildComparisons()"] --> G
   G["장보기 플랜 Agent<br/>generateActionPlans()<br/>generatePresentationSummary()"] --> H[분석 결과 대시보드]
@@ -33,13 +33,13 @@ flowchart TD
 
 ## 각 Agent 역할과 구현
 
-### 1. OCR·입력 보완 Agent — `mockParseReceipt`
+### 1. OCR·입력 보완 Agent — `parseReceiptImageWithVision`, `mockParseReceipt`
 
 | | |
 | --- | --- |
 | 역할 | 영수증에서 날짜·상호·품목·금액을 추출하고, 인식이 어려우면 직접 입력으로 유도 |
-| 현재 MVP | 이미지 업로드 시 mock OCR 안내 후 미리 준비된 샘플 결과 사용. 품목 카테고리를 룰 기반으로 보정 |
-| 실제 서비스 확장 | 함수 내부를 OCR API(네이버 CLOVA OCR 등) 호출로 교체. 반환 타입 `Omit<Receipt, 'id'>` 유지 |
+| 현재 MVP | **업로드 사진은 LLM Vision이 실제로 인식** (`app/api/ocr` — 인식과 카테고리 분류를 단일 호출로 수행, 반환 타입 `Omit<Receipt, 'id'>` 유지). 저장 전 확인/수정 화면 제공, 합계 오차·날짜 불명은 플래그로 사용자 확인 유도. 키 없음·오류·영수증 아님은 정직한 안내 후 샘플/직접 입력으로 폴백. 샘플 영수증은 `mockParseReceipt`로 데모 결정성 유지. 이미지는 저장·로깅 없이 즉시 폐기 |
+| 실제 서비스 확장 | 전자영수증 제휴 연동으로 무입력(zero-input) 자동 수집 — OCR 자체가 과도기 수단 |
 
 ### 2. 거래내역 매칭 Agent — `matchReceiptsToTransactions`, `applyMatchOverrides`
 

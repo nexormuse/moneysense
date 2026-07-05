@@ -47,7 +47,7 @@ export default function ReceiptInputPanel({ onSave, onSwitchToManual }: ReceiptI
   return (
     <div className="space-y-4">
       {/* 입력 방법 선택 */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 gap-2">
         <button
           type="button"
           onClick={() => {
@@ -100,7 +100,7 @@ export default function ReceiptInputPanel({ onSave, onSwitchToManual }: ReceiptI
 
       {/* 샘플 영수증(mock OCR 결과) 선택 */}
       {!pending && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {ocrSampleReceipts.map((sample, index) => (
             <button
               key={sample.label}

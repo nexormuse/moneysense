@@ -38,8 +38,8 @@ export function LocalSpendingCard({ ratio }: { ratio: number }) {
 
 export default function ActionPlanPanel({ analysis }: ActionPlanPanelProps) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-      <Card className="lg:col-span-2">
+    <div className="grid grid-cols-1 gap-3">
+      <Card>
         <div className="flex items-center gap-2 mb-1">
           <span className="rounded-lg bg-emerald-50 p-1.5 text-emerald-600">
             <ListChecks size={16} />
@@ -77,7 +77,7 @@ export default function ActionPlanPanel({ analysis }: ActionPlanPanelProps) {
           ))}
         </ol>
         <p className="mt-3 text-[11px] text-slate-400">
-          * 예상 절약 금액은 참고용 추정치이며, 실제 가격을 보장하지 않아요.
+          * 예상 절약 금액은 입력된 기록으로 계산한 참고용 추정치예요.
         </p>
       </Card>
 

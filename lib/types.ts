@@ -116,6 +116,7 @@ export type PreviousData = {
   prices: Record<string, number>; // 품목명 → 이전 단가
   convenienceMealCount: number;   // 지난주 간편식 구매 횟수
   convenienceRatio: number;       // 지난주 편의점 식비 비중 (0~1)
+  totalSpending?: number;         // 지난주 총 지출 (홈의 지난 소비 → 이번 소비 비교용)
 };
 
 // 사용자가 직접 저장한 주간 비교 기준 (샘플 previousData를 대체)

@@ -87,7 +87,7 @@ export default function TransactionPanel({
 
       {showForm ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
             <input
               type="text"

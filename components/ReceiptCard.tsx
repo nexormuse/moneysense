@@ -26,7 +26,7 @@ export default function ReceiptCard({ receipt, onDelete, onUpdate }: ReceiptCard
   // 편집 모드: 같은 폼을 재사용해 날짜·상호·금액·품목까지 수정
   if (editing && onUpdate) {
     return (
-      <div className="rounded-xl border border-emerald-300 bg-white p-4 sm:col-span-2">
+      <div className="rounded-xl border border-emerald-300 bg-white p-4">
         <p className="mb-3 text-sm font-semibold text-slate-800">
           영수증 편집 — {receipt.storeName}
           <span className="ml-2 align-middle">

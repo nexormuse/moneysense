@@ -11,3 +11,12 @@ body {
   font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
     "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
 }
+
+/* 클릭 가능한 요소는 웹에서 마우스 커서로 알 수 있게 한다 */
+@layer base {
+  button:not(:disabled),
+  [role="button"] {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+}

@@ -6,14 +6,14 @@ export const sampleTransactions: Transaction[] = [
   {
     id: 'tx-1',
     date: '2026-07-01',
-    merchantName: '○○마트',
+    merchantName: 'iM마트',
     amount: 41000,
     paymentMethod: 'card',
   },
   {
     id: 'tx-2',
     date: '2026-07-03',
-    merchantName: '편의점',
+    merchantName: '미소24',
     amount: 13800,
     paymentMethod: 'card',
   },
@@ -25,7 +25,7 @@ export const sampleReceipts: Receipt[] = [
     id: 'rc-1',
     type: 'itemized',
     date: '2026-07-01',
-    storeName: '○○마트',
+    storeName: 'iM마트',
     storeType: 'large_mart',
     totalAmount: 41000,
     paymentMethod: 'card',
@@ -41,7 +41,7 @@ export const sampleReceipts: Receipt[] = [
     id: 'rc-2',
     type: 'itemized',
     date: '2026-07-03',
-    storeName: '편의점',
+    storeName: '미소24',
     storeType: 'convenience_store',
     totalAmount: 13800,
     paymentMethod: 'card',
@@ -57,7 +57,7 @@ export const sampleReceipts: Receipt[] = [
     id: 'rc-3',
     type: 'itemized',
     date: '2026-07-04',
-    storeName: '동네시장',
+    storeName: '샛별시장',
     storeType: 'traditional_market',
     totalAmount: 22000,
     paymentMethod: 'cash', // 현금 결제라 카드내역에 없음
@@ -77,6 +77,7 @@ export const previousData: PreviousData = {
   },
   convenienceMealCount: 1, // 지난주 컵라면 등 간편식 1회
   convenienceRatio: 0.12,  // 지난주 편의점 식비 비중 12%
+  totalSpending: 64500,    // 지난주 총 지출 (이번 주 76,800원과 비교)
 };
 
 // "영수증 추가" 화면에서 고를 수 있는 샘플 영수증 (mock OCR 결과)
@@ -104,7 +105,7 @@ export const ocrSampleReceipts: { label: string; description: string; receipt: O
     receipt: {
       type: 'summary',
       date: '2026-07-04',
-      storeName: '동네반찬가게',
+      storeName: '이모네반찬',
       storeType: 'local_store',
       totalAmount: 15000,
       paymentMethod: 'cash',
@@ -117,7 +118,7 @@ export const ocrSampleReceipts: { label: string; description: string; receipt: O
     receipt: {
       type: 'card_slip',
       date: '2026-07-02',
-      storeName: '커피전문점',
+      storeName: '봄날커피',
       storeType: 'franchise',
       totalAmount: 4500,
       paymentMethod: 'card',

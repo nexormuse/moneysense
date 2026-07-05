@@ -73,7 +73,7 @@ export default function ManualExpenseForm({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={labelClass}>날짜</label>
           <input
@@ -89,7 +89,7 @@ export default function ManualExpenseForm({
             type="text"
             value={storeName}
             onChange={(event) => setStoreName(event.target.value)}
-            placeholder="예: 동네시장, ○○마트"
+            placeholder="예: iM마트, 샛별시장"
             className={inputClass}
           />
         </div>

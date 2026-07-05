@@ -38,7 +38,7 @@ export function Button({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`font-medium transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
     >
       {children}
     </button>

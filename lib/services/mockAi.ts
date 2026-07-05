@@ -231,6 +231,7 @@ export function buildBaseline(receipts: Receipt[], savedAt: string): UserBaselin
     prices,
     convenienceMealCount,
     convenienceRatio: convenienceSpending / totalSpending,
+    totalSpending: receipts.reduce((sum, receipt) => sum + receipt.totalAmount, 0),
     savedAt,
   };
 }

@@ -30,7 +30,7 @@ export default function CauseBreakdownCards({ causeDetails }: CauseBreakdownCard
       <p className="text-sm text-slate-500 mb-3">
         생활비 온도를 올린 요인을 4가지로 나눠 살펴봤어요.
       </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3">
         {causeDetails.map((cause) => {
           const ratio = Math.min(1, cause.points / maxPoints[cause.key]);
           return (

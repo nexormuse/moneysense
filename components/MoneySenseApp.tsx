@@ -3,10 +3,13 @@
 
 import {
   ArrowRight,
+  CheckCircle2,
+  ChevronRight,
   Flame,
   Home,
   ListChecks,
   PenLine,
+  PiggyBank,
   Receipt as ReceiptIcon,
   Sparkles,
   Thermometer,
@@ -29,8 +32,19 @@ import type { AppState, MatchOverride, Receipt, Transaction, UserBaseline } from
 
 const STORAGE_KEY = 'moneysense-state-v1';
 
-type Tab = 'home' | 'input' | 'result';
-type InputTab = 'receipt' | 'manual' | 'transactions';
+export type Tab = 'home' | 'input' | 'result';
+export type InputTab = 'receipt' | 'manual' | 'transactions';
+
+// 현재 휴대폰 화면 정보 (오른쪽 설명 패널이 화면에 맞는 안내를 보여주는 데 사용)
+export type AppScreen = {
+  tab: Tab;
+  inputTab: InputTab;
+  hasData: boolean;
+};
+
+type MoneySenseAppProps = {
+  onScreenChange?: (screen: AppScreen) => void;
+};
 
 let idSeq = 0;
 const nextId = (prefix: string) => `${prefix}-${Date.now()}-${idSeq++}`;
@@ -47,7 +61,7 @@ function StepLabel({ step, text }: { step: number; text: string }) {
   );
 }
 
-export default function MoneySenseApp() {
+export default function MoneySenseApp({ onScreenChange }: MoneySenseAppProps) {
   const [tab, setTab] = useState<Tab>('home');
   const [inputTab, setInputTab] = useState<InputTab>('receipt');
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -56,6 +70,8 @@ export default function MoneySenseApp() {
   const [baseline, setBaseline] = useState<UserBaseline | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [toast, setToast] = useState('');
+  // 직접 입력 저장 완료 모달에 보여줄 영수증
+  const [savedReceipt, setSavedReceipt] = useState<Receipt | null>(null);
 
   // 첫 로딩 시 localStorage에서 상태 복원
   useEffect(() => {
@@ -97,6 +113,15 @@ export default function MoneySenseApp() {
 
   const hasData = receipts.length > 0;
 
+  // 현재 화면 정보를 오른쪽 설명 패널에 알린다
+  useEffect(() => {
+    onScreenChange?.({ tab, inputTab, hasData });
+  }, [tab, inputTab, hasData, onScreenChange]);
+
+  // 홈 화면 소비 비교: 지난 소비(비교 기준) vs 이번 소비(현재 영수증 합계)
+  const currentTotal = receipts.reduce((sum, receipt) => sum + receipt.totalAmount, 0);
+  const previousTotal = (baseline ?? previousData).totalSpending ?? 0;
+
   // 샘플 데모 데이터 로딩 (데모 수치가 항상 같게 나오도록 판정·기준도 초기화)
   const loadDemo = () => {
     setReceipts(sampleReceipts);
@@ -116,9 +141,15 @@ export default function MoneySenseApp() {
     setToast('모든 데이터를 초기화했어요.');
   };
 
-  const addReceipt = (receipt: Omit<Receipt, 'id'>) => {
-    setReceipts((prev) => [...prev, { ...receipt, id: nextId('rc') }]);
-    setToast('영수증이 저장됐어요. 분석 결과에서 확인해보세요.');
+  const addReceipt = (receipt: Omit<Receipt, 'id'>, showModal = false) => {
+    const saved: Receipt = { ...receipt, id: nextId('rc') };
+    setReceipts((prev) => [...prev, saved]);
+    if (showModal) {
+      // 직접 입력은 저장된 내용을 모달로 확인시켜준다
+      setSavedReceipt(saved);
+    } else {
+      setToast('영수증이 저장됐어요. 분석 결과에서 확인해보세요.');
+    }
   };
 
   const addTransaction = (transaction: Omit<Transaction, 'id'>) => {
@@ -187,9 +218,9 @@ export default function MoneySenseApp() {
   };
 
   const navItems: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'home', label: '홈', icon: <Home size={16} /> },
-    { key: 'input', label: '입력', icon: <PenLine size={16} /> },
-    { key: 'result', label: '분석 결과', icon: <Thermometer size={16} /> },
+    { key: 'home', label: '홈', icon: <Home size={18} /> },
+    { key: 'input', label: '입력', icon: <PenLine size={18} /> },
+    { key: 'result', label: '분석 결과', icon: <Thermometer size={18} /> },
   ];
 
   const inputTabs: { key: InputTab; label: string }[] = [
@@ -199,10 +230,11 @@ export default function MoneySenseApp() {
   ];
 
   return (
-    <div className="min-h-screen">
+    // 모바일 앱 셸: 상단 헤더 + 콘텐츠 + 하단 탭바 (데스크톱에서는 휴대폰 프레임 안에 들어간다)
+    <div className="flex min-h-screen flex-col lg:min-h-full">
       {/* 헤더 (AppShell) */}
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between px-4 py-3">
           <button
             type="button"
             onClick={() => setTab('home')}
@@ -212,195 +244,221 @@ export default function MoneySenseApp() {
               <Flame size={16} />
             </span>
             <span className="text-lg font-bold text-slate-900">머니센스</span>
-            <span className="hidden sm:inline text-xs text-slate-400">
-              AI 생활금융 Agent
-            </span>
           </button>
-
-          <nav className="flex items-center gap-1">
-            {navItems.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setTab(item.key)}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  tab === item.key
-                    ? 'bg-emerald-50 text-emerald-700'
-                    : 'text-slate-500 hover:bg-slate-100'
-                }`}
-              >
-                {item.icon}
-                <span className="hidden sm:inline">{item.label}</span>
-                {/* 데이터가 있으면 분석 결과 탭에 현재 온도를 표시 */}
-                {item.key === 'result' && hasData && (
-                  <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[11px] font-bold text-orange-600">
-                    {analysis.temperature}℃
-                  </span>
-                )}
-              </button>
-            ))}
-            {hasData && (
-              <button
-                type="button"
-                onClick={resetAll}
-                className="ml-1 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-500"
-                title="데이터 초기화"
-              >
-                <Trash2 size={15} />
-              </button>
-            )}
-          </nav>
+          {hasData && (
+            <button
+              type="button"
+              onClick={resetAll}
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-500"
+              title="데이터 초기화"
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-6 space-y-6">
+      {/* 토스트 알림: 헤더 바로 아래에 떠 있다 (레이아웃을 밀지 않음) */}
+      {toast && (
+        <div className="sticky top-[3.3rem] z-30 h-0">
+          <div className="flex justify-center pt-2">
+            <div className="rounded-full bg-slate-900/90 px-4 py-2 text-xs font-medium text-white shadow-lg">
+              {toast}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <main className="flex-1 px-4 py-5 space-y-5">
         {/* ---------- 홈 ---------- */}
-        {tab === 'home' && (
-          <>
-            {/* 히어로 */}
-            <section className="rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-700 px-6 py-10 text-white sm:px-10">
-              <Badge tone="green" className="!bg-white/15 !text-emerald-50 !border-white/20 mb-4">
-                <Sparkles size={12} /> 영수증 OCR 가계부가 아니에요
-              </Badge>
-              <h1 className="text-2xl sm:text-3xl font-bold leading-snug">
-                이번 달 생활비,
-                <br />왜 올랐을까요?
-              </h1>
-              <p className="mt-3 text-sm sm:text-base text-emerald-50/90 leading-relaxed max-w-md">
-                머니센스가 영수증과 거래내역을 연결해 <b>생활비 온도</b>를 알려드립니다.
-                무엇을 샀고, 왜 생활비가 올랐고, 다음에는 어떻게 바꾸면 좋을지까지.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-2">
+        {tab === 'home' &&
+          (hasData ? (
+            <>
+              {/* 지난 소비 → 이번 소비 비교 (숫자 중심) */}
+              <section className="rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-700 p-5 text-white">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">이번 주 소비 리포트</p>
+                  <button
+                    type="button"
+                    onClick={() => setTab('result')}
+                    className="flex items-center gap-0.5 rounded-full bg-white/15 py-1 pl-2.5 pr-1.5 text-xs font-bold text-white transition-colors hover:bg-white/25 active:scale-95"
+                  >
+                    {analysis.temperature}℃ {analysis.temperatureLabel}
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+                <div className="mt-4 grid grid-cols-[1fr_auto_1.2fr] items-center gap-2">
+                  <div>
+                    <p className="text-[11px] text-emerald-100/80">지난 소비</p>
+                    <p className="mt-0.5 text-xl font-semibold text-emerald-50/95">
+                      {previousTotal > 0 ? `${previousTotal.toLocaleString('ko-KR')}원` : '기록 없음'}
+                    </p>
+                  </div>
+                  <ArrowRight size={20} className="text-emerald-200" />
+                  <div className="text-right">
+                    <p className="text-[11px] text-emerald-100/80">이번 소비</p>
+                    <p className="mt-0.5 text-3xl font-bold tracking-tight">
+                      {currentTotal.toLocaleString('ko-KR')}원
+                    </p>
+                  </div>
+                </div>
+                {previousTotal > 0 && (
+                  <p className="mt-3.5 rounded-xl bg-white/10 px-3 py-2 text-xs text-emerald-50">
+                    지난 지출보다{' '}
+                    <b>
+                      {Math.abs(currentTotal - previousTotal).toLocaleString('ko-KR')}원 (
+                      {currentTotal >= previousTotal ? '+' : '-'}
+                      {Math.abs(Math.round(((currentTotal - previousTotal) / previousTotal) * 100))}
+                      %)
+                    </b>{' '}
+                    {currentTotal >= previousTotal ? '늘었어요' : '줄었어요'}
+                  </p>
+                )}
+              </section>
+
+              {/* 원인 미리보기: 주요 원인 3개 + 자세히 보기 유도 */}
+              {analysis.mainReasons.length > 0 && (
                 <button
                   type="button"
-                  onClick={loadDemo}
-                  className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors shadow-sm"
+                  onClick={() => setTab('result')}
+                  className="group block w-full text-left"
+                  aria-label="원인분해 자세히 보기"
                 >
-                  샘플 데모 보기
+                  <Card className="!p-4 transition-all group-hover:border-emerald-400 group-hover:shadow-md group-active:scale-[0.99]">
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <ListChecks size={16} className="text-blue-500" />
+                        <span className="text-sm font-semibold text-slate-800">
+                          왜 올랐을까요?
+                        </span>
+                      </div>
+                      <ChevronRight
+                        size={16}
+                        className="text-slate-300 transition-colors group-hover:text-emerald-500"
+                      />
+                    </div>
+                    <ol className="space-y-1.5">
+                      {analysis.mainReasons.map((reason, index) => (
+                        <li key={reason} className="flex items-start gap-2 text-sm text-slate-600">
+                          <span className="mt-0.5 flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-blue-50 text-[11px] font-semibold text-blue-500">
+                            {index + 1}
+                          </span>
+                          {reason}
+                        </li>
+                      ))}
+                    </ol>
+                    <p className="mt-3 text-xs font-semibold text-emerald-600">
+                      원인분해 자세히 보기 →
+                    </p>
+                  </Card>
                 </button>
+              )}
+
+              {/* 플랜 미리보기: 플랜 목록 + 절약 힌트 + 자세히 보기 유도 */}
+              {analysis.actionPlans.length > 0 && (
                 <button
                   type="button"
+                  onClick={() => setTab('result')}
+                  className="group block w-full text-left"
+                  aria-label="다음 장보기 플랜 자세히 보기"
+                >
+                  <Card className="!p-4 transition-all group-hover:border-emerald-400 group-hover:shadow-md group-active:scale-[0.99]">
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <ReceiptIcon size={16} className="text-emerald-600" />
+                        <span className="text-sm font-semibold text-slate-800">
+                          다음 장보기 플랜
+                        </span>
+                      </div>
+                      <ChevronRight
+                        size={16}
+                        className="text-slate-300 transition-colors group-hover:text-emerald-500"
+                      />
+                    </div>
+                    <ul className="space-y-2">
+                      {analysis.actionPlans.slice(0, 2).map((plan, index) => (
+                        <li key={plan.text} className="flex items-start gap-2">
+                          <span className="mt-0.5 flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-bold text-white">
+                            {index + 1}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-sm leading-relaxed text-slate-600">{plan.text}</p>
+                            {plan.savingHint && (
+                              <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                                <PiggyBank size={11} /> {plan.savingHint}
+                              </span>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-3 text-xs font-semibold text-emerald-600">
+                      전체 플랜 {analysis.actionPlans.length}개 보기 →
+                    </p>
+                  </Card>
+                </button>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button onClick={() => setTab('result')}>분석 결과 보기</Button>
+                <Button
+                  variant="secondary"
                   onClick={() => {
                     setTab('input');
                     setInputTab('receipt');
                   }}
-                  className="rounded-xl border border-white/40 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
                 >
                   영수증 추가하기
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTab('input');
-                    setInputTab('manual');
-                  }}
-                  className="rounded-xl border border-white/40 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
-                >
-                  직접 입력하기
-                </button>
-              </div>
-            </section>
-
-            {/* 차별성 설명: 카드내역 총액 → 영수증 품목 보강 */}
-            <section className="rounded-2xl border border-slate-200 bg-white p-5">
-              <p className="text-sm font-semibold text-slate-800">
-                카드내역만으로는 <span className="text-emerald-600">무엇을 샀는지</span> 알 수
-                없어요
-              </p>
-              <p className="mt-0.5 text-xs text-slate-500">
-                머니센스는 영수증을 연결해 총액 뒤에 숨은 품목을 보여주고, 생활비가 오른 이유를
-                설명해요.
-              </p>
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-stretch gap-2">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-[11px] font-medium text-slate-400 mb-1.5">
-                    카드·계좌 거래내역
-                  </p>
-                  <p className="text-sm font-semibold text-slate-700">○○마트 41,000원</p>
-                  <p className="mt-1.5 text-xs text-slate-400">
-                    총액만 남고 품목 정보는 사라져요
-                  </p>
-                </div>
-                <div className="flex items-center justify-center text-emerald-500">
-                  <ArrowRight size={18} className="rotate-90 sm:rotate-0" />
-                </div>
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                  <p className="text-[11px] font-medium text-emerald-600 mb-1.5">
-                    + 영수증 연결 (품목 보강)
-                  </p>
-                  <p className="text-sm font-semibold text-slate-700">
-                    우유 3,200 · 계란 7,800 · 세제 12,000 …
-                  </p>
-                  <p className="mt-1.5 text-xs text-emerald-700">
-                    품목 단위로 &ldquo;왜 올랐는지&rdquo;까지 설명해요
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            {/* 핵심 카드 3개 */}
-            <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Card className="!p-4">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Thermometer size={16} className="text-orange-500" />
-                  <span className="text-sm font-semibold text-slate-800">생활비 온도</span>
-                </div>
-                {hasData ? (
-                  <p className="text-2xl font-bold text-slate-900">
-                    {analysis.temperature}℃{' '}
-                    <span className="text-sm font-medium text-slate-500">
-                      {analysis.temperatureLabel}
-                    </span>
-                  </p>
-                ) : (
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    카드내역에 없는 품목 단위 소비까지 반영해 이번 주 생활비 상태를 온도로
-                    보여줘요.
-                  </p>
-                )}
-              </Card>
-              <Card className="!p-4">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <ListChecks size={16} className="text-blue-500" />
-                  <span className="text-sm font-semibold text-slate-800">원인분해</span>
-                </div>
-                {hasData && analysis.mainReasons.length > 0 ? (
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    {analysis.mainReasons[0]}
-                  </p>
-                ) : (
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    가격 상승·구매량 증가·소비처 변화·조정 가능한 소비, 4가지로 원인을 나눠
-                    설명해요.
-                  </p>
-                )}
-              </Card>
-              <Card className="!p-4">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <ReceiptIcon size={16} className="text-emerald-600" />
-                  <span className="text-sm font-semibold text-slate-800">다음 장보기 플랜</span>
-                </div>
-                {hasData && analysis.actionPlans.length > 0 ? (
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    {analysis.actionPlans[0].text}
-                  </p>
-                ) : (
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    절약 포인트와 지역상생 전환 제안까지, 다음 장보기에서 바꿀 것을 알려줘요.
-                  </p>
-                )}
-              </Card>
-            </section>
-
-            {hasData && (
-              <div className="text-center">
-                <Button variant="secondary" onClick={() => setTab('result')}>
-                  분석 결과 자세히 보기 →
                 </Button>
               </div>
-            )}
-          </>
-        )}
+            </>
+          ) : (
+            <>
+              {/* 첫 방문: 시작 화면 */}
+              <section className="rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-700 px-6 py-8 text-white">
+                <Badge tone="green" className="!bg-white/15 !text-emerald-50 !border-white/20 mb-4">
+                  <Sparkles size={12} /> AI 생활금융 에이전트
+                </Badge>
+                <h1 className="text-2xl font-bold leading-snug">
+                  이번 달 생활비,
+                  <br />왜 올랐을까요?
+                </h1>
+                <p className="mt-3 text-sm text-emerald-50/90 leading-relaxed">
+                  영수증과 거래내역을 연결해 <b>생활비 온도</b>를 알려드려요. 무엇을 샀고, 왜
+                  올랐고, 다음에는 어떻게 바꾸면 좋을지까지.
+                </p>
+                <div className="mt-6 grid grid-cols-1 gap-2">
+                  <button
+                    type="button"
+                    onClick={loadDemo}
+                    className="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors shadow-sm"
+                  >
+                    샘플 데모 보기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTab('input');
+                      setInputTab('receipt');
+                    }}
+                    className="rounded-xl border border-white/40 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
+                  >
+                    영수증 추가하기
+                  </button>
+                </div>
+              </section>
+
+              <Card className="!p-4">
+                <p className="text-sm font-semibold text-slate-800">
+                  지난 소비 → 이번 소비, 숫자로 한눈에
+                </p>
+                <p className="mt-1.5 text-xs text-slate-500 leading-relaxed">
+                  기록이 쌓이면 이 화면에서 지난 소비와 이번 소비를 바로 비교하고, 생활비
+                  온도와 원인, 다음 장보기 플랜까지 확인할 수 있어요.
+                </p>
+              </Card>
+            </>
+          ))}
 
         {/* ---------- 입력 ---------- */}
         {tab === 'input' && (
@@ -444,7 +502,7 @@ export default function MoneySenseApp() {
                     />
                   ) : (
                     <>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 gap-3">
                         {receipts.map((receipt) => (
                           <ReceiptCard
                             key={receipt.id}
@@ -471,7 +529,7 @@ export default function MoneySenseApp() {
                 title="직접 입력"
                 subtitle="영수증이 없거나 사진이 흐릿해도 괜찮아요. 총액만으로도 기록할 수 있어요."
               >
-                <ManualExpenseForm onSave={addReceipt} />
+                <ManualExpenseForm onSave={(receipt) => addReceipt(receipt, true)} />
               </Card>
             )}
 
@@ -540,17 +598,64 @@ export default function MoneySenseApp() {
               />
 
               <p className="text-center text-[11px] text-slate-400 pb-4">
-                머니센스의 분석과 제안은 입력된 기록 기반의 참고 정보이며, 금융 상품 권유나 가격
-                보장이 아니에요.
+                머니센스의 분석과 제안은 입력된 기록을 바탕으로 한 참고 정보예요.
               </p>
             </div>
           ))}
       </main>
 
-      {/* 토스트 알림 */}
-      {toast && (
-        <div className="fixed bottom-5 left-1/2 z-30 -translate-x-1/2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm text-white shadow-lg">
-          {toast}
+      {/* 하단 탭바 */}
+      <nav className="sticky bottom-0 z-20 mt-auto flex border-t border-slate-200 bg-white/95 backdrop-blur">
+        {navItems.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => setTab(item.key)}
+            className={`flex flex-1 flex-col items-center gap-0.5 pb-2.5 pt-2 text-[10px] font-medium transition-colors ${
+              tab === item.key ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <span className="relative">
+              {item.icon}
+              {/* 데이터가 있으면 분석 결과 탭에 현재 온도 배지를 표시 */}
+              {item.key === 'result' && hasData && (
+                <span className="absolute -right-6 -top-1.5 rounded-full bg-orange-100 px-1 py-px text-[9px] font-bold text-orange-600">
+                  {analysis.temperature}℃
+                </span>
+              )}
+            </span>
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
+      {/* 직접 입력 저장 완료 모달 (데스크톱에서는 휴대폰 프레임 안에만 뜬다) */}
+      {savedReceipt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-5 backdrop-blur-sm">
+          <div className="w-full max-h-[85%] overflow-y-auto rounded-2xl bg-white p-5 shadow-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex flex-col items-center text-center">
+              <CheckCircle2 size={40} className="text-emerald-500" />
+              <p className="mt-2 text-base font-bold text-slate-900">지출이 저장됐어요</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                저장된 내용을 확인해주세요. 매칭과 분석에 바로 반영돼요.
+              </p>
+            </div>
+            <div className="mt-4">
+              <ReceiptCard receipt={savedReceipt} />
+            </div>
+            <Button
+              size="lg"
+              className="mt-4 w-full"
+              onClick={() => {
+                // 확인을 누르면 저장된 영수증 화면으로 이동
+                setSavedReceipt(null);
+                setTab('input');
+                setInputTab('receipt');
+              }}
+            >
+              확인
+            </Button>
+          </div>
         </div>
       )}
     </div>

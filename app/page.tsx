@@ -1,5 +1,5 @@
-import MoneySenseApp from '@/components/MoneySenseApp';
+import ShowcaseLayout from '@/components/ShowcaseLayout';
 
 export default function Home() {
-  return <MoneySenseApp />;
+  return <ShowcaseLayout />;
 }

@@ -1,6 +1,7 @@
 {
   "name": "moneysense",
   "version": "0.1.0",
+  "description": "영수증과 거래내역으로 생활비 상승 원인을 분석하는 AI 생활금융 Agent MVP",
   "private": true,
   "scripts": {
     "dev": "next dev",

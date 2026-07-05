@@ -2,6 +2,7 @@
 // docs/prompt-blueprint.md의 품목 분류 Agent 프롬프트 설계를 그대로 구현한다.
 // API 키는 서버 환경변수(ANTHROPIC_API_KEY)로만 접근하며 클라이언트에 노출되지 않는다.
 import { NextResponse } from 'next/server';
+import { checkRateLimit, clientIp } from '@/lib/rateLimit';
 import type { ItemCategory } from '@/lib/types';
 
 const VALID_CATEGORIES = new Set<ItemCategory>([
@@ -37,6 +38,11 @@ essential(필수 식료품) | fresh_food(신선식품) | convenience_meal(간편
 입력: "우유식빵" → { "category": "snack_drink", "confidence": 0.85 }`;
 
 export async function POST(request: Request) {
+  // 남용 방지: IP당 분당 20회
+  if (!checkRateLimit(`classify:${clientIp(request)}`, 20)) {
+    return NextResponse.json({ error: 'rate-limited' }, { status: 429 });
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   // 키가 없으면 503 → 클라이언트가 룰 기반으로 폴백한다
   if (!apiKey) {
@@ -51,6 +57,10 @@ export async function POST(request: Request) {
   }
   if (typeof name !== 'string' || !name.trim()) {
     return NextResponse.json({ error: 'invalid-name' }, { status: 400 });
+  }
+  // 품목명 길이 상한 (프롬프트 주입·토큰 남용 방지)
+  if (name.length > 50) {
+    return NextResponse.json({ error: 'name-too-long' }, { status: 400 });
   }
 
   try {

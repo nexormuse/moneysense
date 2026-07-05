@@ -190,13 +190,13 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
               key={point.step}
               className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm"
             >
-              <p className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
-                <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[10px] text-white">
+              <p className="flex items-center gap-1.5 text-[13px] font-bold text-slate-800">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[11px] text-white">
                   {point.step}
                 </span>
                 {point.title}
               </p>
-              <p className="mt-1 text-[11px] leading-snug text-slate-500">
+              <p className="mt-1 text-xs leading-snug text-slate-500">
                 {point.description}
               </p>
             </div>
@@ -207,18 +207,18 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
       {/* 현재 화면 안내: 왼쪽 휴대폰 화면을 따라 자동으로 바뀐다 */}
       <section className="mt-4 shrink-0 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 p-4 text-white shadow-lg shadow-emerald-600/25">
         <div className="flex items-baseline justify-between gap-2">
-          <p className="flex items-center gap-2 text-[11px] font-bold tracking-widest text-emerald-100">
+          <p className="flex items-center gap-2 text-xs font-bold tracking-widest text-emerald-100">
             <MonitorSmartphone size={14} /> 지금 보고 있는 화면
           </p>
-          <h2 className="text-base font-bold">{guide.title}</h2>
+          <h2 className="text-lg font-bold">{guide.title}</h2>
         </div>
         <ul className="mt-2.5 space-y-1.5">
           {guide.points.map((point) => (
             <li
               key={point}
-              className="flex items-start gap-2 text-[13px] leading-snug text-emerald-50/95"
+              className="flex items-start gap-2 text-sm leading-snug text-emerald-50/95"
             >
-              <ArrowRight size={13} className="mt-0.5 shrink-0 text-emerald-200" />
+              <ArrowRight size={14} className="mt-0.5 shrink-0 text-emerald-200" />
               {point}
             </li>
           ))}
@@ -228,7 +228,7 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
       {/* 서비스 참고 정보: 탭으로 구분 */}
       <section className="mt-4 flex min-h-0 flex-1 flex-col">
         <div className="flex shrink-0 items-center gap-2">
-          <h2 className="text-sm font-bold text-slate-900">서비스 참고</h2>
+          <h2 className="text-base font-bold text-slate-900">서비스 참고</h2>
           <span className="h-px flex-1 bg-slate-200" />
           <div className="flex gap-1.5">
             {referenceTabs.map((item) => (
@@ -236,7 +236,7 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
                 key={item.key}
                 type="button"
                 onClick={() => setReferenceTab(item.key)}
-                className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all ${
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[13px] font-semibold transition-all ${
                   referenceTab === item.key
                     ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25'
                     : 'bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50 hover:text-slate-700'
@@ -250,18 +250,18 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
         </div>
 
         <div className="mt-2.5 min-h-0 flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          {/* 소개 */}
+          {/* 소개: 세 블록을 위아래로 고르게 분배해 빈 공간 없이 채운다 */}
           {referenceTab === 'intro' && (
-            <div className="space-y-3">
-              <p className="text-[13px] leading-snug text-slate-600">
+            <div className="flex h-full flex-col justify-between gap-3">
+              <p className="text-sm leading-relaxed text-slate-600">
                 카드·계좌 내역에는{' '}
                 <b className="text-slate-900">&ldquo;iM마트 41,000원&rdquo;</b>처럼 총액만
                 남습니다. 머니센스는 영수증으로 품목 단위 소비를 복원하고, 생활비 상승의 원인을
                 분해한 뒤 다음 장보기 플랜까지 제안합니다.
               </p>
-              <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-2">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="mb-1 text-[11px] font-bold text-slate-400">
+              <div className="grid flex-1 grid-cols-[1fr_auto_1fr] items-stretch gap-2">
+                <div className="flex flex-col justify-center rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="mb-1 text-xs font-bold text-slate-400">
                     카드·계좌 거래내역
                   </p>
                   <p className="text-sm font-bold text-slate-700">iM마트 41,000원</p>
@@ -270,8 +270,8 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
                 <div className="flex items-center justify-center text-emerald-500">
                   <ArrowRight size={18} />
                 </div>
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                  <p className="mb-1 text-[11px] font-bold text-emerald-600">+ 영수증 연결</p>
+                <div className="flex flex-col justify-center rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                  <p className="mb-1 text-xs font-bold text-emerald-600">+ 영수증 연결</p>
                   <p className="text-sm font-bold text-slate-700">우유 3,200 · 계란 7,800 …</p>
                   <p className="mt-0.5 text-xs text-emerald-700">품목 단위로 복원돼요</p>
                 </div>
@@ -284,10 +284,10 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
                 ].map((chip) => (
                   <div
                     key={chip.label}
-                    className="rounded-xl bg-gradient-to-b from-emerald-50 to-white p-2.5 text-center ring-1 ring-emerald-100"
+                    className="rounded-xl bg-gradient-to-b from-emerald-50 to-white p-3 text-center ring-1 ring-emerald-100"
                   >
-                    <p className="text-base font-bold text-emerald-700">{chip.value}</p>
-                    <p className="mt-0.5 text-[11px] font-medium text-slate-500">{chip.label}</p>
+                    <p className="text-lg font-bold text-emerald-700">{chip.value}</p>
+                    <p className="mt-0.5 text-xs font-medium text-slate-500">{chip.label}</p>
                   </div>
                 ))}
               </div>
@@ -295,23 +295,24 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
           )}
 
           {/* 동작 방식 */}
+          {/* 동작 방식: 2×2 그리드가 세로 공간을 꽉 채운다 */}
           {referenceTab === 'how' && (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid h-full grid-cols-2 grid-rows-2 gap-2">
               {steps.map((step, index) => (
                 <div
                   key={step.title}
-                  className="rounded-xl border border-slate-200 bg-gradient-to-b from-slate-50/80 to-white p-3"
+                  className="flex flex-col justify-center rounded-xl border border-slate-200 bg-gradient-to-b from-slate-50/80 to-white p-3.5"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm">
                       {step.icon}
                     </span>
-                    <span className="text-[11px] font-bold tracking-wide text-emerald-600">
+                    <span className="text-xs font-bold tracking-wide text-emerald-600">
                       STEP {index + 1}
                     </span>
                   </div>
-                  <p className="mt-2 text-sm font-bold text-slate-800">{step.title}</p>
-                  <p className="mt-0.5 text-xs leading-snug text-slate-500">
+                  <p className="mt-2 text-[15px] font-bold text-slate-800">{step.title}</p>
+                  <p className="mt-1 text-[13px] leading-snug text-slate-500">
                     {step.description}
                   </p>
                 </div>
@@ -320,8 +321,9 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
           )}
 
           {/* 생활비 온도 */}
+          {/* 생활비 온도: 온도계 + 3×2 요인 그리드가 세로 공간을 꽉 채운다 */}
           {referenceTab === 'temperature' && (
-            <div className="space-y-3">
+            <div className="flex h-full flex-col gap-3">
               {/* 가로 온도계 */}
               <div>
                 <div className="flex h-3 overflow-hidden rounded-full">
@@ -332,33 +334,33 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
                 <div className="mt-2 flex">
                   {temperatureBands.map((band) => (
                     <div key={band.label} className={`${band.width} text-center`}>
-                      <p className={`text-xs font-bold ${band.text}`}>{band.label}</p>
-                      <p className="text-[10px] text-slate-400">{band.range}</p>
+                      <p className={`text-[13px] font-bold ${band.text}`}>{band.label}</p>
+                      <p className="text-[11px] text-slate-400">{band.range}</p>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* 온도를 올리는 요인 */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid flex-1 grid-cols-2 grid-rows-3 gap-2">
                 {temperatureFactors.map((factor) => (
                   <div
                     key={factor.name}
-                    className="flex items-start justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-2.5"
+                    className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2"
                   >
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-700">{factor.name}</p>
-                      <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+                      <p className="text-[13px] font-bold text-slate-700">{factor.name}</p>
+                      <p className="mt-0.5 text-xs leading-snug text-slate-500">
                         {factor.description}
                       </p>
                     </div>
-                    <span className="shrink-0 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-600">
+                    <span className="shrink-0 rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-bold text-orange-600">
                       +{factor.max}
                     </span>
                   </div>
                 ))}
-                <div className="flex items-center justify-center rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50 p-2.5">
-                  <p className="text-center text-[11px] font-medium leading-snug text-emerald-700">
+                <div className="flex items-center justify-center rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50 px-3 py-2">
+                  <p className="text-center text-xs font-medium leading-snug text-emerald-700">
                     기본 <b className="text-sm">35℃</b>에서 시작 —<br />
                     높을수록 생활비를 돌아볼 신호예요
                   </p>
@@ -367,19 +369,19 @@ export default function ShowcasePanel({ screen }: { screen: AppScreen }) {
             </div>
           )}
 
-          {/* 주요 기능 */}
+          {/* 주요 기능: 4×2 그리드가 세로 공간을 꽉 채운다 */}
           {referenceTab === 'features' && (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid h-full grid-cols-2 grid-rows-4 gap-2">
               {features.map((feature) => (
                 <div
                   key={feature.title}
-                  className="rounded-xl border border-slate-200 bg-slate-50/60 p-2.5"
+                  className="flex flex-col justify-center rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2"
                 >
-                  <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                    <Leaf size={12} className="shrink-0 text-emerald-500" />
+                  <p className="flex items-center gap-1.5 text-[13px] font-bold text-slate-700">
+                    <Leaf size={13} className="shrink-0 text-emerald-500" />
                     {feature.title}
                   </p>
-                  <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+                  <p className="mt-0.5 text-xs leading-snug text-slate-500">
                     {feature.description}
                   </p>
                 </div>

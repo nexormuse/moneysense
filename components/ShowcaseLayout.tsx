@@ -31,8 +31,8 @@ export default function ShowcaseLayout() {
           </div>
         </div>
 
-        {/* 화면 연동 설명 패널 (데스크톱 전용): 휴대폰과 같은 높이, 스크롤 없이 구성 */}
-        <aside className="hidden lg:block lg:h-[min(760px,calc(100vh-6rem))] lg:max-w-xl lg:flex-1 lg:overflow-hidden">
+        {/* 화면 연동 설명 패널 (데스크톱 전용): 휴대폰 프레임(베젤 포함)과 위아래 라인을 맞춘다 */}
+        <aside className="hidden lg:block lg:h-[calc(min(760px,100vh-6rem)+1.25rem)] lg:max-w-xl lg:flex-1 lg:overflow-hidden">
           <ShowcasePanel screen={screen} />
         </aside>
       </div>

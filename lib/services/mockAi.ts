@@ -106,11 +106,57 @@ export const categoryLabels: Record<ItemCategory, string> = {
   other: '기타',
 };
 
-// ---------- mock OCR ----------
+// ---------- 영수증 Vision OCR ----------
+
+export type VisionOcrResult =
+  | { ok: true; receipt: Omit<Receipt, 'id'>; sumMismatch: boolean; dateUncertain: boolean }
+  | { ok: false; reason: 'not_a_receipt' | 'disabled' | 'failed' };
 
 /**
- * mock OCR: 실제 OCR API 대신 미리 준비한 결과를 돌려준다.
- * 실제 연동 시 이미지 파일을 받아 OCR API를 호출하도록 교체한다.
+ * LLM Vision 영수증 인식 (사용자 업로드 이미지 전용).
+ * 실패해도 예외를 던지지 않고 reason을 돌려줘, UI가 정직한 안내와 함께
+ * 기존 경로(샘플 선택/직접 입력)로 이어지게 한다. 샘플 데모는 이 함수를 거치지 않는다.
+ */
+export async function parseReceiptImageWithVision(
+  base64: string,
+  mediaType: string,
+): Promise<VisionOcrResult> {
+  try {
+    const controller = new AbortController();
+    // 비전 인식은 느릴 수 있어 클라이언트 타임아웃 20초 (서버는 15초)
+    const timer = setTimeout(() => controller.abort(), 20000);
+    const response = await fetch('/api/ocr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: base64, mediaType }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (response.status === 503) return { ok: false, reason: 'disabled' };
+    if (response.status === 422) return { ok: false, reason: 'not_a_receipt' };
+    if (!response.ok) return { ok: false, reason: 'failed' };
+    const data = (await response.json()) as {
+      receipt?: Omit<Receipt, 'id'>;
+      sumMismatch?: boolean;
+      dateUncertain?: boolean;
+    };
+    if (!data.receipt) return { ok: false, reason: 'failed' };
+    return {
+      ok: true,
+      receipt: data.receipt,
+      sumMismatch: Boolean(data.sumMismatch),
+      dateUncertain: Boolean(data.dateUncertain),
+    };
+  } catch {
+    return { ok: false, reason: 'failed' };
+  }
+}
+
+// ---------- mock OCR (샘플 영수증 전용) ----------
+
+/**
+ * mock OCR: 샘플 영수증 선택 시 미리 준비한 결과를 돌려준다 (데모 결정성 유지).
+ * 사용자 업로드 이미지는 parseReceiptImageWithVision이 처리한다.
  */
 export function mockParseReceipt(receipt: Omit<Receipt, 'id'>): Omit<Receipt, 'id'> {
   // 품목 카테고리를 룰 기반으로 다시 분류해 보정한다

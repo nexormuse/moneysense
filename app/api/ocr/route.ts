@@ -79,12 +79,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'rate-limited' }, { status: 429 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  // 키가 없으면 503 → 클라이언트가 정직한 안내(샘플/직접 입력 유도)로 폴백한다
-  if (!apiKey) {
-    return NextResponse.json({ error: 'no-api-key' }, { status: 503 });
-  }
-
+  // 요청 검증을 키 확인보다 먼저 수행해, 잘못된 요청은 키 유무와 무관하게 400을 받는다
   let image: unknown;
   let mediaType: unknown;
   try {
@@ -101,6 +96,12 @@ export async function POST(request: Request) {
   // base64 길이로 원본 크기 추정 (4/3 배수)
   if (image.length * 0.75 > MAX_IMAGE_BYTES) {
     return NextResponse.json({ error: 'image-too-large' }, { status: 400 });
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  // 키가 없으면 503 → 클라이언트가 정직한 안내(샘플/직접 입력 유도)로 폴백한다
+  if (!apiKey) {
+    return NextResponse.json({ error: 'no-api-key' }, { status: 503 });
   }
 
   try {

@@ -6,6 +6,9 @@ import { checkRateLimit, clientIp } from '@/lib/rateLimit';
 import { classifyItem } from '@/lib/services/mockAi';
 import type { ExpenseItem, ItemCategory, PaymentMethod, Receipt, StoreType } from '@/lib/types';
 
+// Vercel 함수 제한을 서버 측 LLM 타임아웃(15초)보다 길게 확보 — 플랫폼이 먼저 함수를 죽이지 않게 한다
+export const maxDuration = 30;
+
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4MB
 const ALLOWED_MEDIA_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
@@ -114,7 +117,8 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1500,
+        // 품목 40~50개 대형마트 영수증도 JSON이 잘리지 않도록 여유 확보
+        max_tokens: 3000,
         system: SYSTEM_PROMPT,
         messages: [
           {

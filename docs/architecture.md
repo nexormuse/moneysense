@@ -4,7 +4,7 @@
 
 현재 MVP는 **Agentic workflow의 골격을 mock adapter와 계산 로직으로 먼저 검증**한 뒤, 검증된 교체 지점에 실제 LLM을 단계적으로 연결하고 있다. 영수증 Vision OCR과 직접 입력 품목 분류는 실제 LLM 호출로 동작하며(폴백: 샘플/룰 기반), 금융 API 등 나머지는 같은 방식으로 각 adapter 내부에 연결해 확장한다.
 
-이를 위해 모든 분석 로직을 `lib/services/mockAi.ts` 한 곳에 모으고, **함수 시그니처(입력/출력 타입)를 유지한 채 내부 구현만 교체**하면 되는 구조로 분리했다. UI 컴포넌트는 `analyzeAll()` 파이프라인의 결과 타입(`AnalysisResult`, `MatchResult`)만 의존하므로, 내부가 mock이든 실제 API든 화면 코드는 바뀌지 않는다.
+이를 위해 모든 분석 로직을 `lib/services/ai.ts` 한 곳에 모으고, **함수 시그니처(입력/출력 타입)를 유지한 채 내부 구현만 교체**하면 되는 구조로 분리했다. UI 컴포넌트는 `analyzeAll()` 파이프라인의 결과 타입(`AnalysisResult`, `MatchResult`)만 의존하므로, 내부가 mock이든 실제 API든 화면 코드는 바뀌지 않는다.
 
 ## 전체 흐름
 
@@ -89,7 +89,7 @@ flowchart TD
 
 ## mock adapter → 실제 API 교체 전략
 
-1. **교체 지점이 한 파일**: 모든 AI 로직이 `lib/services/mockAi.ts`에 있고, UI는 `analyzeAll()` 결과 타입만 사용한다.
+1. **교체 지점이 한 파일**: 모든 AI 로직이 `lib/services/ai.ts`에 있고, UI는 `analyzeAll()` 결과 타입만 사용한다.
 2. **함수 단위 점진 교체**: 예를 들어 OCR만 먼저 실제 API로 바꾸고 나머지는 mock을 유지해도 전체 파이프라인이 동작한다.
    - `mockParseReceipt` → OCR API 호출 (async 전환 시 호출부에 로딩 상태만 추가)
    - `classifyItem` → LLM 분류 호출

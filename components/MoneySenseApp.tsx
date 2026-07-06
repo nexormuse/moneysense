@@ -38,7 +38,7 @@ import {
   sampleTransactions,
   sampleTransactionsSaving,
 } from '@/lib/mockData';
-import { analyzeAll, buildBaseline } from '@/lib/services/mockAi';
+import { analyzeAll, buildBaseline } from '@/lib/services/ai';
 import type { AppState, MatchOverride, Receipt, Transaction, UserBaseline } from '@/lib/types';
 
 // v2: 상호명 개편(iM마트 등) 이전에 저장된 옛 데이터를 무시하기 위해 키를 올림

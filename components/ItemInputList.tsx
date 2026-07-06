@@ -5,7 +5,7 @@ import { Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import AmountQuickButtons from './AmountQuickButtons';
 import { Badge, Button } from './ui';
-import { categoryLabels, classifyItem, classifyItemWithLLM } from '@/lib/services/mockAi';
+import { categoryLabels, classifyItem, classifyItemWithLLM } from '@/lib/services/ai';
 import type { ExpenseItem } from '@/lib/types';
 
 type ItemInputListProps = {

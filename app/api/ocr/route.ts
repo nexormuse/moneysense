@@ -3,7 +3,7 @@
 // 개인정보 보호: 업로드된 이미지는 서버에 저장·로깅하지 않으며, LLM 호출 후 즉시 폐기된다.
 import { NextResponse } from 'next/server';
 import { checkRateLimit, clientIp } from '@/lib/rateLimit';
-import { classifyItem } from '@/lib/services/mockAi';
+import { classifyItem } from '@/lib/services/ai';
 import type { ExpenseItem, ItemCategory, PaymentMethod, Receipt, StoreType } from '@/lib/types';
 
 // Vercel 함수 제한을 서버 측 LLM 타임아웃(15초)보다 길게 확보 — 플랫폼이 먼저 함수를 죽이지 않게 한다

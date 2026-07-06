@@ -5,7 +5,7 @@ import { Pencil, X } from 'lucide-react';
 import { useState } from 'react';
 import ManualExpenseForm from './ManualExpenseForm';
 import { Badge } from './ui';
-import { categoryLabels } from '@/lib/services/mockAi';
+import { categoryLabels } from '@/lib/services/ai';
 import {
   isLocalStoreType,
   paymentMethodLabels,

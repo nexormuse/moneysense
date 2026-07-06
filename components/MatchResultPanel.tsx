@@ -5,7 +5,7 @@ import { Check, ChevronDown, Link2, Link2Off, Undo2, UserCheck, X } from 'lucide
 import { useState } from 'react';
 import { Badge, Card, EmptyState } from './ui';
 import { matchStatusLabels } from '@/lib/labels';
-import { categoryLabels } from '@/lib/services/mockAi';
+import { categoryLabels } from '@/lib/services/ai';
 import type { MatchResult, MatchStatus, Receipt, Transaction } from '@/lib/types';
 
 type MatchResultPanelProps = {

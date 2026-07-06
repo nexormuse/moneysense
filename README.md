@@ -76,7 +76,7 @@ flowchart TD
   F --> G[다음 장보기 플랜 Agent]
 ```
 
-| Agent | 역할 | 현재 구현 (`lib/services/mockAi.ts`) |
+| Agent | 역할 | 현재 구현 (`lib/services/ai.ts`) |
 | --- | --- | --- |
 | OCR·입력 보완 | 영수증에서 품목·금액 추출, 흐릿하면 직접 입력 유도 | `parseReceiptImageWithVision` — 업로드 사진은 LLM Vision 인식(`ANTHROPIC_API_KEY` 설정 시), 실패 시 직접 입력 유도. 샘플 영수증은 `mockParseReceipt` |
 | 거래내역 매칭 | 금액·날짜·상호·결제수단 점수제로 영수증과 거래 연결 | `matchReceiptsToTransactions`, `applyMatchOverrides` |
@@ -150,7 +150,7 @@ flowchart LR
 - **lucide-react** (아이콘)
 - **localStorage** (DB 없이 상태 저장)
 - **LLM Vision OCR + 품목 분류** (Anthropic API — 영수증 사진 인식과 카테고리 분류, 폴백: 룰 기반)
-- **mock AI adapter** (`lib/services/mockAi.ts` — 나머지 분석 로직도 실제 API로 교체 가능한 구조)
+- **AI Agent adapter** (`lib/services/ai.ts` — Vision OCR·품목 분류는 실호출, 나머지 분석 로직도 같은 구조로 교체 가능)
 - **Vercel** (배포)
 
 ## 프로젝트 구조
@@ -167,7 +167,7 @@ lib/
   mockData.ts         # 샘플 데모 데이터 (증가/절약 시나리오)
   labels.ts           # enum 값 → 한국어 라벨 매핑
   services/
-    mockAi.ts         # mock AI 함수 모음 (OCR·매칭·온도·원인분해·플랜 생성)
+    ai.ts             # AI Agent 함수 모음 (Vision OCR·LLM 분류는 실호출, 일부는 mock adapter)
 public/               # 정적 리소스
 docs/                 # 아키텍처, 확장 계획
 ```

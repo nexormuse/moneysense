@@ -6,7 +6,7 @@ import { useRef, useState } from 'react';
 import ItemInputList from './ItemInputList';
 import { Badge, Button, Card } from './ui';
 import { ocrSampleReceipts } from '@/lib/mockData';
-import { mockParseReceipt, parseReceiptImageWithVision } from '@/lib/services/mockAi';
+import { mockParseReceipt, parseReceiptImageWithVision } from '@/lib/services/ai';
 import { paymentMethodLabels, receiptTypeLabels, storeTypeLabels } from '@/lib/labels';
 import type { ExpenseItem, Receipt } from '@/lib/types';
 

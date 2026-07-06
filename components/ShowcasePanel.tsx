@@ -60,7 +60,7 @@ function getScreenGuide(screen: AppScreen): ScreenGuide {
       title: '입력 — 영수증 추가',
       points: [
         '샘플 영수증 3종: 품목형(품목까지 인식), 합계형(총액만 — 품목을 직접 추가), 카드매출전표형(매칭·증빙용).',
-        '이미지를 업로드하면 mock OCR 안내 후 인식 결과로 쓸 샘플을 고르게 돼요.',
+        '영수증 사진을 올리면 AI가 날짜·상호·품목·금액을 인식하고, 저장 전에 직접 확인·수정할 수 있어요.',
         '저장된 영수증은 연필 아이콘으로 편집, X로 삭제할 수 있어요.',
       ],
     };
@@ -146,7 +146,7 @@ const features = [
   { title: '주간 기준 축적', description: '이번 주 기록을 마감해 다음 주 비교 기준으로 저장' },
   { title: '사후 편집', description: '저장된 영수증을 수정하면 매칭·분석이 자동 재계산' },
   { title: '지역상생 리포트', description: '전통시장·동네가게 소비 비중을 함께 보여줌' },
-  { title: '어댑터 구조', description: 'mock OCR·AI를 실제 API로 바로 교체 가능한 설계' },
+  { title: 'AI Agent 구조', description: 'Vision OCR·품목 분류는 실제 LLM으로 동작, 나머지 Agent도 같은 구조로 교체' },
 ];
 
 export default function ShowcasePanel({ screen }: { screen: AppScreen }) {

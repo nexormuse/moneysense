@@ -23,6 +23,9 @@ export type ItemCategory =
 
 export type ItemSource = 'OCR' | 'USER_INPUT' | 'NONE';
 
+// 품목 용량 단위 (단위가격 = 원/g, 원/ml, 원/개)
+export type VolumeUnit = 'g' | 'ml' | '개';
+
 export type MatchStatus =
   | 'matched'        // 매칭 완료 (품목 없는 카드매출전표 등)
   | 'item_enriched'  // 품목 보강 (품목 있는 영수증이 카드내역과 매칭)
@@ -43,6 +46,10 @@ export type ExpenseItem = {
   category: ItemCategory;
   source: ItemSource;
   classifiedBy?: 'llm' | 'rule'; // 분류 출처 (AI 분류 / 룰 기반) — 하이브리드 구조의 시각적 증거
+  // 용량 정보 (슈링크플레이션 감지용, 선택). 없으면 그 품목은 감지 대상에서 제외된다.
+  volume?: number;
+  volumeUnit?: VolumeUnit;
+  volumeSource?: 'parsed' | 'user'; // 품명/영수증에서 파싱 vs 사용자 직접 입력
 };
 
 export type Receipt = {
@@ -143,9 +150,21 @@ export type AnalysisResult = {
   presentationSummary: string;                   // 발표용 3~4문장 요약
 };
 
+// 단위가격 파수꾼: 슈링크플레이션(표시 가격 동결·용량 감소) 감지 결과 1건
+export type ShrinkflationAlert = {
+  itemName: string;
+  prevUnitPrice: number; // 이전 단위가격 (원/g 등)
+  currUnitPrice: number; // 이번 단위가격
+  ratePercent: number;   // 단위가격 상승률 (%)
+  prevVolume: number;
+  currVolume: number;
+  volumeUnit: VolumeUnit;
+};
+
 // 이전 구매 기록 (가격/구매 패턴 비교 기준)
 export type PreviousData = {
   prices: Record<string, number>; // 품목명 → 이전 단가
+  volumes?: Record<string, { volume: number; volumeUnit: VolumeUnit }>; // 품목명 → 이전 용량 (슈링크플레이션 감지용)
   convenienceMealCount: number;   // 지난주 간편식 구매 횟수
   convenienceRatio: number;       // 지난주 편의점 식비 비중 (0~1)
   totalSpending?: number;         // 지난주 총 지출 (홈의 지난 소비 → 이번 소비 비교용)

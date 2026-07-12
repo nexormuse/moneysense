@@ -26,6 +26,7 @@ import MatchResultPanel from './MatchResultPanel';
 import PresentationSummaryCard from './PresentationSummaryCard';
 import ReceiptCard from './ReceiptCard';
 import ReceiptInputPanel from './ReceiptInputPanel';
+import ShrinkflationCard from './ShrinkflationCard';
 import TemperatureBreakdown from './TemperatureBreakdown';
 import TemperatureCard from './TemperatureCard';
 import TransactionPanel from './TransactionPanel';
@@ -38,7 +39,7 @@ import {
   sampleTransactions,
   sampleTransactionsSaving,
 } from '@/lib/mockData';
-import { analyzeAll, buildBaseline } from '@/lib/services/ai';
+import { analyzeAll, buildBaseline, computeUnitPrice, detectShrinkflation } from '@/lib/services/ai';
 import type { AppState, MatchOverride, Receipt, Transaction, UserBaseline } from '@/lib/types';
 
 // v2: 상호명 개편(iM마트 등) 이전에 저장된 옛 데이터를 무시하기 위해 키를 올림
@@ -126,6 +127,15 @@ export default function MoneySenseApp({ onScreenChange }: MoneySenseAppProps) {
     () => analyzeAll(receipts, transactions, baseline ?? previousData, matchOverrides),
     [receipts, transactions, baseline, matchOverrides],
   );
+
+  // 단위가격 파수꾼: 온도 계산과 분리된 고지 전용 감지 (v0 — 온도에 반영하지 않음)
+  const { shrinkAlerts, volumeTrackedCount } = useMemo(() => {
+    const allItems = receipts.flatMap((receipt) => receipt.items);
+    return {
+      shrinkAlerts: detectShrinkflation(allItems, baseline ?? previousData),
+      volumeTrackedCount: allItems.filter((item) => computeUnitPrice(item) !== null).length,
+    };
+  }, [receipts, baseline]);
 
   const hasData = receipts.length > 0;
 
@@ -722,6 +732,8 @@ export default function MoneySenseApp({ onScreenChange }: MoneySenseAppProps) {
                       causeDetails={analysis.causeDetails}
                       saving={analysis.spendingDelta < 0}
                     />
+                    {/* 단위가격 파수꾼: 표시 가격이 그대로여도 용량 감소(실질 인상)를 고지 */}
+                    <ShrinkflationCard alerts={shrinkAlerts} trackedCount={volumeTrackedCount} />
                     {/* 지난 소비 vs 이번 소비: 숫자 변화가 원인으로 이어지는 근거 */}
                     <ComparisonPanel comparisons={analysis.comparisons} />
                   </div>

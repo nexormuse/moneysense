@@ -3,8 +3,15 @@
 // 개인정보 보호: 업로드된 이미지는 서버에 저장·로깅하지 않으며, LLM 호출 후 즉시 폐기된다.
 import { NextResponse } from 'next/server';
 import { checkRateLimit, clientIp } from '@/lib/rateLimit';
-import { classifyItem } from '@/lib/services/ai';
-import type { ExpenseItem, ItemCategory, PaymentMethod, Receipt, StoreType } from '@/lib/types';
+import { classifyItem, parseVolumeFromName } from '@/lib/services/ai';
+import type {
+  ExpenseItem,
+  ItemCategory,
+  PaymentMethod,
+  Receipt,
+  StoreType,
+  VolumeUnit,
+} from '@/lib/types';
 
 // Vercel 함수 제한을 서버 측 LLM 타임아웃(15초)보다 길게 확보 — 플랫폼이 먼저 함수를 죽이지 않게 한다
 export const maxDuration = 30;
@@ -46,7 +53,11 @@ const SYSTEM_PROMPT = `너는 한국 영수증 판독기다. 영수증 이미지
   | local_store(동네가게) | franchise(프랜차이즈) | online(온라인몰) | other(기타) 중 추정
 - paymentMethod: "card"(카드) | "cash"(현금) | "unknown"(불명)
 - totalAmount: 총 결제 금액 (숫자)
-- items: 품목 배열 [{ "name": string, "amount": number, "category": string }]
+- items: 품목 배열 [{ "name": string, "amount": number, "category": string,
+  "volume": number|null, "volumeUnit": "g"|"ml"|"개"|null }]
+  품명·표기에 용량(중량·부피·개수)이 보이면 volume/volumeUnit으로 출력한다.
+  L은 ml로(×1000), kg은 g으로(×1000) 환산하고, "900ml×2"처럼 묶음이면 곱한 값을 출력한다.
+  보이지 않으면 추측하지 말고 null로 둔다.
 - receiptType: 품목이 식별되면 "itemized", 총액만 보이면 "total_only" (이때 items는 빈 배열)
 
 category는 아래 8개 외 값 금지:
@@ -64,7 +75,8 @@ essential(필수 식료품) | fresh_food(신선식품) | convenience_meal(간편
 
 출력 JSON 스키마:
 { "date": string|null, "storeName": string, "storeType": string, "paymentMethod": string,
-  "totalAmount": number, "items": [{ "name": string, "amount": number, "category": string }],
+  "totalAmount": number,
+  "items": [{ "name": string, "amount": number, "category": string, "volume": number|null, "volumeUnit": string|null }],
   "receiptType": "itemized" | "total_only" }`;
 
 type LlmReceipt = {
@@ -74,9 +86,17 @@ type LlmReceipt = {
   storeType?: string;
   paymentMethod?: string;
   totalAmount?: number;
-  items?: { name?: string; amount?: number; category?: string }[];
+  items?: {
+    name?: string;
+    amount?: number;
+    category?: string;
+    volume?: number | null;
+    volumeUnit?: string | null;
+  }[];
   receiptType?: string;
 };
+
+const VALID_VOLUME_UNITS = new Set<VolumeUnit>(['g', 'ml', '개']);
 
 let ocrItemSeq = 0;
 
@@ -183,6 +203,17 @@ export async function POST(request: Request) {
           typeof item.category === 'string' && VALID_CATEGORIES.has(item.category as ItemCategory)
             ? (item.category as ItemCategory)
             : null;
+        // 용량: LLM 출력이 유효하면 사용, 검증 실패 시 해당 필드만 무시하고 품명 파싱으로 폴백
+        // (둘 다 없으면 용량 없이 저장 — 그 품목은 슈링크플레이션 감지 대상에서 제외)
+        const llmVolumeValid =
+          typeof item.volume === 'number' &&
+          Number.isFinite(item.volume) &&
+          item.volume > 0 &&
+          typeof item.volumeUnit === 'string' &&
+          VALID_VOLUME_UNITS.has(item.volumeUnit as VolumeUnit);
+        const volumeInfo = llmVolumeValid
+          ? { volume: Math.round(item.volume as number), volumeUnit: item.volumeUnit as VolumeUnit }
+          : parseVolumeFromName(name);
         return {
           id: `ocr-${Date.now()}-${ocrItemSeq++}`,
           name,
@@ -190,6 +221,7 @@ export async function POST(request: Request) {
           category: llmCategory ?? classifyItem(name),
           source: 'OCR' as const,
           classifiedBy: llmCategory ? ('llm' as const) : ('rule' as const),
+          ...(volumeInfo ? { ...volumeInfo, volumeSource: 'parsed' as const } : {}),
         };
       });
 

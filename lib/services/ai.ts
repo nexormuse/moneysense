@@ -11,9 +11,11 @@ import type {
   MatchResult,
   PreviousData,
   Receipt,
+  ShrinkflationAlert,
   TemperatureFactorItem,
   Transaction,
   UserBaseline,
+  VolumeUnit,
 } from '../types';
 
 // ---------- 유틸 ----------
@@ -83,6 +85,115 @@ export async function classifyItemWithLLM(
   } catch {
     return fallback;
   }
+}
+
+// ---------- 단위가격 파수꾼 (슈링크플레이션 감지 v0) ----------
+
+/**
+ * 품명 문자열에서 용량을 파싱한다. L→ml, kg→g로 정규화하고 ×N 곱셈을 처리한다.
+ * 용량을 읽을 수 없으면 null — 그 품목은 감지 대상에서 제외된다 (추정하지 않음).
+ *
+ * 대표 케이스 검증 기록 (수동 확인, 2026-07-13):
+ *   "서울우유 1L"        → { volume: 1000, volumeUnit: 'ml' }
+ *   "삼다수 500ml"       → { volume: 500,  volumeUnit: 'ml' }
+ *   "콜라 1.5리터"       → { volume: 1500, volumeUnit: 'ml' }
+ *   "감자칩 200g"        → { volume: 200,  volumeUnit: 'g' }
+ *   "쌀 1kg"             → { volume: 1000, volumeUnit: 'g' }
+ *   "곰곰 우유 900ml*2"  → { volume: 1800, volumeUnit: 'ml' } (곱셈 처리)
+ *   "새우깡 90G"         → { volume: 90,   volumeUnit: 'g' } (대소문자 무시)
+ *   "계란 30개"          → { volume: 30,   volumeUnit: '개' }
+ *   "삼각김밥 ×2"        → { volume: 2,    volumeUnit: '개' }
+ *   "휴지" / "페트360"   → null (단위 없는 숫자는 용량으로 보지 않음)
+ */
+export function parseVolumeFromName(
+  name: string,
+): { volume: number; volumeUnit: VolumeUnit } | null {
+  const normalized = name.replace(/\s/g, '').toLowerCase();
+
+  // 1) 중량/부피: 숫자 + 단위 (ml → l, g → kg 순서로 긴 단위를 먼저 매칭)
+  const measure = normalized.match(/(\d+(?:\.\d+)?)(ml|㎖|밀리리터|미리|l|리터|ℓ|kg|㎏|킬로|g|그램)/);
+
+  // 2) 곱셈/입수: ×2, *2, x2, 2입, 2개입, 2개, 2봉, 2팩, 2캔
+  const multiplierMatch =
+    normalized.match(/[x×*](\d+)/) ?? normalized.match(/(\d+)(?:개입|입|개|봉입|봉|팩|캔)(?![a-z가-힣])/);
+  const multiplier = multiplierMatch ? parseInt(multiplierMatch[1], 10) : 1;
+
+  if (measure) {
+    const value = parseFloat(measure[1]);
+    const unit = measure[2];
+    if (!Number.isFinite(value) || value <= 0 || multiplier <= 0) return null;
+    if (unit === 'l' || unit === '리터' || unit === 'ℓ') {
+      return { volume: Math.round(value * 1000 * multiplier), volumeUnit: 'ml' };
+    }
+    if (unit === 'kg' || unit === '㎏' || unit === '킬로') {
+      return { volume: Math.round(value * 1000 * multiplier), volumeUnit: 'g' };
+    }
+    if (unit === 'g' || unit === '그램') {
+      return { volume: Math.round(value * multiplier), volumeUnit: 'g' };
+    }
+    return { volume: Math.round(value * multiplier), volumeUnit: 'ml' };
+  }
+
+  // 중량/부피 없이 입수만 있으면 '개' 단위 용량으로 본다
+  if (multiplierMatch && multiplier > 0) {
+    return { volume: multiplier, volumeUnit: '개' };
+  }
+
+  return null;
+}
+
+/** 단위가격(원/g·원/ml·원/개)을 계산한다. 용량 정보가 없으면 null — 저장하지 않고 항상 파생 계산. */
+export function computeUnitPrice(item: ExpenseItem): number | null {
+  if (!item.volume || item.volume <= 0 || !item.volumeUnit) return null;
+  return item.amount / item.volume;
+}
+
+/**
+ * 슈링크플레이션(실질 인상) 후보 감지.
+ * 이전 기록에 동일 품목(정규화된 품명)의 가격·용량이 모두 있고,
+ * 단위가격이 5% 이상 올랐는데 표시 가격은 같거나 내린 경우만 반환한다.
+ * 표시 가격도 오른 단순 인상은 기존 '가격 상승' 요인으로만 처리한다 (중복 계상 금지).
+ * v0은 고지 기능만 — 생활비 온도 계산에는 반영하지 않는다.
+ */
+export function detectShrinkflation(
+  currentItems: ExpenseItem[],
+  previous: PreviousData,
+): ShrinkflationAlert[] {
+  const alerts: ShrinkflationAlert[] = [];
+  const seen = new Set<string>();
+
+  for (const item of currentItems) {
+    const key = item.name.replace(/\s/g, '');
+    if (seen.has(key)) continue;
+    const currUnitPrice = computeUnitPrice(item);
+    if (currUnitPrice === null) continue;
+
+    const prevPrice = previous.prices[key];
+    const prevVolume = previous.volumes?.[key];
+    // 이전 기록에 가격·용량이 모두 있고 단위가 같은 품목만 비교 가능
+    if (prevPrice === undefined || !prevVolume || prevVolume.volumeUnit !== item.volumeUnit) {
+      continue;
+    }
+    if (prevVolume.volume <= 0) continue;
+    const prevUnitPrice = prevPrice / prevVolume.volume;
+
+    const unitPriceUp = currUnitPrice >= prevUnitPrice * 1.05; // 단위가격 +5% 이상
+    const displayPriceFrozen = item.amount <= prevPrice;        // 표시 가격은 같거나 하락
+    if (unitPriceUp && displayPriceFrozen) {
+      seen.add(key);
+      alerts.push({
+        itemName: item.name,
+        prevUnitPrice,
+        currUnitPrice,
+        ratePercent: Math.round((currUnitPrice / prevUnitPrice - 1) * 100),
+        prevVolume: prevVolume.volume,
+        currVolume: item.volume as number,
+        volumeUnit: item.volumeUnit as VolumeUnit,
+      });
+    }
+  }
+
+  return alerts;
 }
 
 /**
@@ -307,15 +418,25 @@ export function applyMatchOverrides(
  * 이번 주 영수증 기록으로 다음 주 분석의 비교 기준(이전 가격·구매 패턴)을 만든다.
  * '기타' 품목은 실제 상품이 아니므로 가격 기준에서 제외하고,
  * 같은 품목이 여러 번 나오면 최고가를 기준값으로 저장해 가짜 상승을 막는다.
+ * 용량 정보가 있는 품목은 용량도 함께 저장해 다음 주 단위가격 비교(슈링크플레이션 감지)에 쓴다.
  */
 export function buildBaseline(receipts: Receipt[], savedAt: string): UserBaseline {
   const prices: Record<string, number> = {};
+  const volumes: NonNullable<PreviousData['volumes']> = {};
   let convenienceMealCount = 0;
 
   for (const receipt of receipts) {
     for (const item of receipt.items) {
       if (item.category !== 'other') {
         const key = item.name.replace(/\s/g, '');
+        // 기준 가격으로 채택된 그 품목의 용량을 함께 저장해 단위가격 짝을 맞춘다
+        if ((prices[key] ?? 0) < item.amount) {
+          if (item.volume && item.volume > 0 && item.volumeUnit) {
+            volumes[key] = { volume: item.volume, volumeUnit: item.volumeUnit };
+          } else {
+            delete volumes[key];
+          }
+        }
         prices[key] = Math.max(prices[key] ?? 0, item.amount);
       }
       if (item.category === 'convenience_meal') convenienceMealCount++;
@@ -339,6 +460,7 @@ export function buildBaseline(receipts: Receipt[], savedAt: string): UserBaselin
 
   return {
     prices,
+    volumes,
     convenienceMealCount,
     convenienceRatio: convenienceSpending / totalSpending,
     totalSpending: receipts.reduce((sum, receipt) => sum + receipt.totalAmount, 0),

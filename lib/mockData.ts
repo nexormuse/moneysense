@@ -49,7 +49,8 @@ export const sampleReceipts: Receipt[] = [
       { id: 'rc-2-i1', name: '컵라면', amount: 1800, category: 'convenience_meal', source: 'OCR' },
       { id: 'rc-2-i2', name: '에너지드링크', amount: 2500, category: 'snack_drink', source: 'OCR' },
       { id: 'rc-2-i3', name: '삼각김밥', amount: 1500, category: 'convenience_meal', source: 'OCR' },
-      { id: 'rc-2-i4', name: '과자', amount: 2000, category: 'snack_drink', source: 'OCR' },
+      // 슈링크플레이션 시연: 표시 가격은 지난주와 같지만 용량이 90g → 76g으로 감소 (금액은 그대로 → 온도 불변)
+      { id: 'rc-2-i4', name: '과자', amount: 2000, category: 'snack_drink', source: 'OCR', volume: 76, volumeUnit: 'g', volumeSource: 'parsed' },
       { id: 'rc-2-i5', name: '기타', amount: 6000, category: 'other', source: 'OCR' },
     ],
   },
@@ -74,6 +75,11 @@ export const previousData: PreviousData = {
   prices: {
     우유: 2900,
     계란: 7100,
+    과자: 2000, // 이번 주와 같은 표시 가격 (가격 차이 0 → 온도 요인에 영향 없음)
+  },
+  // 슈링크플레이션 감지 기준: 지난주 과자는 같은 2,000원에 90g (이번 주 76g → 실질 인상)
+  volumes: {
+    과자: { volume: 90, volumeUnit: 'g' },
   },
   convenienceMealCount: 1, // 지난주 컵라면 등 간편식 1회
   convenienceRatio: 0.12,  // 지난주 편의점 식비 비중 12%
@@ -90,6 +96,10 @@ export const previousDataSaving: PreviousData = {
     우유: 3200,
     계란: 7800,
     컵라면: 1800,
+  },
+  // 절약 데모의 단위가격 기준: 우유는 같은 900ml에 단가가 내려간 케이스 (실질 인상 없음)
+  volumes: {
+    우유: { volume: 900, volumeUnit: 'ml' },
   },
   convenienceMealCount: 3, // 지난주 간편식 3회
   convenienceRatio: 0.18,  // 지난주 편의점 식비 비중 18%
@@ -133,7 +143,7 @@ export const sampleReceiptsSaving: Receipt[] = [
     totalAmount: 28500,
     paymentMethod: 'card',
     items: [
-      { id: 'src-1-i1', name: '우유', amount: 3000, category: 'essential', source: 'OCR' }, // 행사가
+      { id: 'src-1-i1', name: '우유', amount: 3000, category: 'essential', source: 'OCR', volume: 900, volumeUnit: 'ml', volumeSource: 'parsed' }, // 행사가 (용량 동일 → 단위가격 하락)
       { id: 'src-1-i2', name: '계란', amount: 7500, category: 'essential', source: 'OCR' }, // 행사가
       { id: 'src-1-i3', name: '두부', amount: 2000, category: 'essential', source: 'OCR' },
       { id: 'src-1-i4', name: '채소', amount: 6000, category: 'fresh_food', source: 'OCR' },
